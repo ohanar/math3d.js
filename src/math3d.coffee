@@ -96,49 +96,54 @@ _loading_threejs_callbacks = []
 math3d.threejs_src = "http://cdnjs.cloudflare.com/ajax/libs/three.js/r68/three.min.js"
 math3d.orbitcontrols_src = "OrbitControls.js"
 
-VERSION = '68'
-#$.ajaxSetup cache: true # when using getScript, cache result.
+remove_element = (element) ->
+    if element is null
+        return
+    if (parent = element.parentElement) is null
+        return
+    parent.removeChild element
 
-loadScript = (script_src, cb) ->
+loadScript = (script_src, callback) ->
+    run_callback = true
+
     script = document.createElement 'script'
     script.type = 'text/javascript'
     script.async = true
     script.src = script_src
 
-    heads = document.getElementsByTagName 'head'
-    if heads.length > 0
-        heads[0].appendChild script
-    else
-        document.documentElement.appendChild script
+    script.onload = ->
+            remove_element script
+            if run_callback
+                run_callback = false
+                callback()
+    script.onerror = ->
+            remove_element script
+            if run_callback
+                run_callback = false
+                callback "error loading script #{script.src}"
 
-    cb()
+    document.head.appendChild script
 
-load_threejs = (cb) ->
-    if THREE?
-        return cb()
+load_threejs = (callback) ->
+    if THREE?.Scene? and THREE?.OrbitControls?
+        return callback()
 
-    _loading_threejs_callbacks.push cb
+    _loading_threejs_callbacks.push callback
     #console.log("load_threejs")
     if _loading_threejs_callbacks.length > 1
         #console.log("load_threejs: already loading...")
         return
 
-    orbitcontrols_checker = ->
-        if THREE.OrbitControls?
-            for cb in _loading_threejs_callbacks
-                cb()
-        else
-            #console.log("load_threejs: waiting for OrbitControls...")
-            setTimeout orbitcontrols_checker, 100
+    run_callbacks = (error) ->
+        for callback in _loading_threejs_callbacks
+            callback error
+        _loading_threejs_callbacks = []
 
-    threejs_checker = ->
-        if THREE?
-            loadScript math3d.orbitcontrols_src, orbitcontrols_checker
+    loadScript math3d.threejs_src, (error) ->
+        if (error)
+            run_callbacks error
         else
-            #console.log("load_threejs: waiting for threejs...")
-            setTimeout threejs_checker, 100
-
-    loadScript math3d.threejs_src, threejs_checker
+            loadScript math3d.orbitcontrols_src, run_callbacks
     
 math3d.load_threejs = load_threejs
 
@@ -176,13 +181,6 @@ get_renderer = (scene) ->
 
     _renderer
 
-remove_element = (element) ->
-    if element is null
-        return
-    if (parent = element.parentElement) is null
-        return
-    parent.removeChild element
-
 class Math3dThreeJS
     constructor: (parent_element, opts) ->
         @opts = defaults opts,
@@ -196,27 +194,27 @@ class Math3dThreeJS
             aspect_ratio    : undefined  # undefined does nothing or a triple [x,y,z] of length three, which scales the x,y,z coordinates of everything by the given values.
             stop_when_gone  : undefined  # if given, animation, etc., stops when this html element (not jquery!) is no longer in the DOM
             frame           : undefined  # if given call set_frame with opts.frame as input when init_done called
-            cb              : undefined  # opts.cb(undefined, this object)
+            callback        : undefined  # opts.callback(error, this object)
 
-        load_threejs (err) =>
-            if err
-                msg = "Error loading THREE.js -- #{err}"
-                if not opts.cb?
-                    console.log msg
+        load_threejs (error) =>
+            if error
+                msg = "Error loading THREE.js -- #{error}"
+                if @opts.callback?
+                    @opts.callback msg
                 else
-                    opts.cb? msg
+                    console.log msg
             else
                 @attach_to_dom parent_element
-                @opts.cb? undefined, @
+                @opts.callback? undefined, @
 
     attach_to_dom: (parent_element) ->
-        if @opts.element?
-            remove_element @opts.element
+        if @element?
+            remove_element @element
         else
-            @opts.element = document.createElement 'span'
-            @opts.element.className = 'math-3d-viewer'
+            @element = document.createElement 'span'
+            @element.className = 'math-3d-viewer'
 
-        parent_element.appendChild @opts.element
+        parent_element.appendChild @element
 
     # client code should call this when start adding objects to the scene
     init: ->
@@ -245,10 +243,10 @@ class Math3dThreeJS
         @init_light()
 
         # set background color
-        @opts.element.style.background = @opts.background
+        @element.style.background = @opts.background
 
         if not @opts.foreground?
-            c = @opts.element.style.background
+            c = @element.style.background
             if not c? or -1 is c.indexOf ')'
                 @opts.foreground = "#000"  # e.g., on firefox - this is best we can do for now
             else
@@ -276,7 +274,7 @@ class Math3dThreeJS
 
         # possibly show the canvas warning.
         if dynamic_renderer_type is 'canvas'
-            @opts.element.title = 'WARNING: using slow non-WebGL canvas renderer'
+            @element.title = 'WARNING: using slow non-WebGL canvas renderer'
 
     set_dynamic_renderer: ->
         # console.log "dynamic renderer"
@@ -288,10 +286,10 @@ class Math3dThreeJS
         @renderer_type = 'dynamic'
 
         # remove the current renderer (if it exists)
-        remove_element @opts.element.lastChild
+        remove_element @element.lastChild
 
         # place renderer in correct place in the DOM
-        @opts.element.appendChild @renderer.domElement
+        @element.appendChild @renderer.domElement
 
         @renderer.setClearColor @opts.background, 1
         @renderer.setSize @opts.width, @opts.height
@@ -325,21 +323,21 @@ class Math3dThreeJS
             @last_canvas_target = @controls.target
 
         # remove the current renderer (if it exists)
-        remove_element @opts.element.lastChild
+        remove_element @element.lastChild
 
         # place renderer in correct place in the DOM
-        @opts.element.appendChild @static_image
+        @element.appendChild @static_image
 
     # On mouseover, we switch the renderer out to use webgl, if available, and also enable spin animation.
     init_on_mouseover: ->
 
-        @opts.element.onmouseenter = =>
+        @element.onmouseenter = =>
             @set_dynamic_renderer()
 
-        @opts.element.onmouseleave = =>
+        @element.onmouseleave = =>
             @set_static_renderer()
 
-        @opts.element.onclick = =>
+        @element.onclick = =>
             @set_dynamic_renderer()
 
     # initialize functions to create new vectors, which take into account the scene's 3d frame aspect ratio.
@@ -810,19 +808,19 @@ class Math3dThreeJS
         @_animate opts
 
     _animate: (opts) ->
-        #console.log("anim?", @opts.element.length, @opts.element.is(":visible"))
+        #console.log("anim?", @element.length, @opts.element.is(":visible"))
 
         if @renderer_type is 'static'
             # will try again when we switch to dynamic renderer
             @_animate_started = false
             return
 
-        #if not $(@opts.element).is ":visible"
-        if @opts.element.offsetWidth <= 0 and @opts.element.offsetWidth <= 0
+        #if not $(@element).is ":visible"
+        if @element.offsetWidth <= 0 and @element.offsetWidth <= 0
             if @opts.stop_when_gone? and not contains document, @opts.stop_when_gone
                 # console.log("stop_when_gone removed from document -- quit animation completely")
                 @_animate_started = false
-            else if not contains document, @opts.element
+            else if not contains document, @element
                 # console.log("element removed from document; wait 5 seconds")
                 setTimeout (=> @_animate opts), 5000
             else
@@ -941,7 +939,7 @@ math3d.render_3d_scene = (opts) ->
                     cb()
             # create the 3d renderer
             opts.scene.opts ?= {}
-            opts.scene.opts.cb = init
+            opts.scene.opts.callback = init
 
             obj = new Math3dThreeJS opts.element, opts.scene.opts
     ], (err) ->
