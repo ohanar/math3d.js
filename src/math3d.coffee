@@ -165,8 +165,9 @@ get_renderer = (scene) ->
     _renderer
 
 class Math3dThreeJS
-    constructor: (parent_element, opts) ->
+    constructor: (opts) ->
         @opts = defaults opts,
+            parent          : required
             width           : undefined
             height          : undefined
             renderer        : undefined  # ignored now
@@ -181,14 +182,53 @@ class Math3dThreeJS
 
         math3d.load_threejs (error) =>
             if error
-                msg = "Error loading THREE.js -- #{error}"
-                if @opts.callback?
-                    @opts.callback msg
+                return @opts.callback? error
+
+            @attach_to_dom @opts.parent
+
+            if @_init
+                return @opts.callback? undefined, @
+            @_init = true
+
+            @init_aspect_ratio_functions()
+
+            @scene = new THREE.Scene()
+
+            # IMPORTANT: There is a major bug in three.js -- if you make the width below more than .5 of the window
+            # width, then after 8 3d renders, things get foobared in WebGL mode.  This happens even with the simplest
+            # demo using the basic cube example from their site with R68.  It even sometimes happens with this workaround, but
+            # at least retrying a few times can fix it.
+            if not @opts.width?
+                @opts.width  = document.documentElement["clientWidth"]*.5
+
+            @opts.height = if @opts.height? then @opts.height else @opts.width*2/3
+
+            @set_dynamic_renderer()
+            @init_orbit_controls()
+            @init_on_mouseover()
+
+            # add a bunch of lights
+            @init_light()
+
+            # set background color
+            @element.style.background = @opts.background
+
+            if not @opts.foreground?
+                c = @element.style.background
+                if not c? or -1 is c.indexOf ')'
+                    @opts.foreground = "#000"  # e.g., on firefox - this is best we can do for now
                 else
-                    console.log msg
-            else
-                @attach_to_dom parent_element
-                @opts.callback? undefined, @
+                    i = c.indexOf ')'
+                    z = []
+                    for a in c.slice(4, i).split ','
+                        b = parseInt a
+                        if b < 128
+                            z.push 255
+                        else
+                            z.push 0
+                    @opts.foreground = rgb_to_hex z[0], z[1], z[2]
+
+            @opts.callback? undefined, @
 
     attach_to_dom: (parent_element) ->
         if @element?
@@ -199,52 +239,8 @@ class Math3dThreeJS
 
         parent_element.appendChild @element
 
-    # client code should call this when start adding objects to the scene
-    init: ->
-        if @_init
-            return
-        @_init = true
-
-        @init_aspect_ratio_functions()
-
-        @scene = new THREE.Scene()
-
-        # IMPORTANT: There is a major bug in three.js -- if you make the width below more than .5 of the window
-        # width, then after 8 3d renders, things get foobared in WebGL mode.  This happens even with the simplest
-        # demo using the basic cube example from their site with R68.  It even sometimes happens with this workaround, but
-        # at least retrying a few times can fix it.
-        if not @opts.width?
-            @opts.width  = document.documentElement["clientWidth"]*.5
-
-        @opts.height = if @opts.height? then @opts.height else @opts.width*2/3
-
-        @set_dynamic_renderer()
-        @init_orbit_controls()
-        @init_on_mouseover()
-
-        # add a bunch of lights
-        @init_light()
-
-        # set background color
-        @element.style.background = @opts.background
-
-        if not @opts.foreground?
-            c = @element.style.background
-            if not c? or -1 is c.indexOf ')'
-                @opts.foreground = "#000"  # e.g., on firefox - this is best we can do for now
-            else
-                i = c.indexOf ')'
-                z = []
-                for a in c.slice(4, i).split ','
-                    b = parseInt a
-                    if b < 128
-                        z.push 255
-                    else
-                        z.push 0
-                @opts.foreground = rgb_to_hex z[0], z[1], z[2]
-
     # client code should call this when done adding objects to the scene
-    init_done: ->
+    finalize: ->
         if @opts.frame?
             @set_frame @opts.frame
 
@@ -744,32 +740,32 @@ class Math3dThreeJS
             wireframe : undefined
             set_frame : undefined
 
-        for o in opts.obj
-            switch o.type
+        for obj in opts.obj
+            switch obj.type
                 when 'text'
                     @add_text
-                        pos           : o.pos
-                        text          : o.text
-                        color         : o.color
-                        fontsize      : o.fontsize
-                        fontface      : o.fontface
-                        constant_size : o.constant_size
+                        pos           : obj.pos
+                        text          : obj.text
+                        color         : obj.color
+                        fontsize      : obj.fontsize
+                        fontface      : obj.fontface
+                        constant_size : obj.constant_size
                 when 'index_face_set'
                     if opts.wireframe?
-                        o.wireframe = opts.wireframe
-                    @add_obj o
-                    if o.mesh and not o.wireframe  # draw a wireframe mesh on top of the surface we just drew.
-                        o.color='#000000'
-                        o.wireframe = o.mesh
-                        @add_obj o
+                        obj.wireframe = opts.wireframe
+                    @add_obj obj
+                    if obj.mesh and not obj.wireframe  # draw a wireframe mesh on top of the surface we just drew.
+                        obj.color='#000000'
+                        obj.wireframe = obj.mesh
+                        @add_obj obj
                 when 'line'
-                    delete o.type
-                    @add_line o
+                    delete obj.type
+                    @add_line obj
                 when 'point'
-                    delete o.type
-                    @add_point o
+                    delete obj.type
+                    @add_point obj
                 else
-                    console.log "ERROR: no renderer for model number = #{o.id}"
+                    console.log "ERROR: no renderer for model number #{obj.id}"
                     return
 
         if opts.set_frame?
@@ -887,22 +883,18 @@ math3d.render_3d_scene = (opts) ->
     #console.log("render_3d_scene: url='#{opts.url}'")
 
     create_scene = (scene) ->
-        if scene.opts?.callback? and opts.callback?
-            orig = scene.opts.callback
-            scene.opts.callback = (error, scene) ->
-                orig error, scene
-                opts.callback error, scene
-        else
-            scene.opts ?= {}
-            obj = scene.obj
-            scene.opts.callback = (error, scene) ->
-                if not error
-                    scene.init()
-                    if obj?
-                        scene.add_3dgraphics_obj obj : obj
-                    scene.init_done()
-                opts.callback? error, scene
-        new Math3dThreeJS opts.element, scene.opts
+        scene.opts ?= {}
+
+        scene.opts.parent = opts.element
+
+        scene.opts.callback = (error, plotter) ->
+            if not error
+                if scene.obj?
+                    plotter.add_3dgraphics_obj obj : scene.obj
+                plotter.finalize()
+            opts.callback? error, plotter
+
+        new Math3dThreeJS scene.opts
 
     switch typeof opts.scene
         when 'object'
