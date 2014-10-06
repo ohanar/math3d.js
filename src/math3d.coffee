@@ -49,7 +49,7 @@ defaults = (opts, base) ->
             "(opts=#{trunc JSON.stringify opts}, base=#{trunc JSON.stringify base})"
         catch
             ""
-    if typeof(opts) isnt 'object'
+    if typeof opts isnt 'object'
         # We put explicit traces before the errors in this function,
         # since otherwise they can be very hard to debug.
         console.trace()
@@ -357,7 +357,7 @@ class Math3dThreeJS
         if @_center?
             @controls.target = @_center
         if @opts.spin
-            if typeof(@opts.spin) is "boolean"
+            if typeof @opts.spin is "boolean"
                 @controls.autoRotateSpeed = 2.0
             else
                 @controls.autoRotateSpeed = @opts.spin
@@ -881,46 +881,49 @@ math3d.render_3d_scene = (opts) ->
     opts = defaults opts,
         scene    : required    # {opts:?, obj:?} or url from which to download (via ajax) a JSON string that parses to {opts:?,obj:?}
         element  : required    # DOM element to attach to
+        timeout  : 30000       # milleseconds for timing out fetchs
         callback : undefined   # callback(error, scene object)
     # Render a 3-d scene
     #console.log("render_3d_scene: url='#{opts.url}'")
 
-    scene_obj = undefined
-    async.series([
-        (callback) ->
-            switch typeof(opts.scene)
-                when 'string'
-                    $.ajax(
-                        url     : opts.scene
-                        timeout : 30000
-                        success : (data) ->
-                            try
-                                opts.scene = JSON.parse data
-                                callback()
-                            catch error
-                                callback error
-                    ).fail ->
-                        callback "error downloading #{opts.scene}"
-                when 'object'
-                    callback()
-                else
-                    callback "bad scene value: #{opts.scene}"
-        (callback) ->
-            # do this initialization *after* we create the 3d renderer
-            init = (error, scene) ->
-                if error
-                    callback error
-                else
-                    scene_obj = scene
+    create_scene = ->
+        if opts.scene.opts?.callback? and opts.callback?
+            orig = opts.scene.opts.callback
+            opts.scene.opts.callback = (error, scene) ->
+                orig error, scene
+                opts.callback error, scene
+        else
+            opts.scene.opts ?= {}
+            opts.scene.opts.callback = (error, scene) ->
+                if not error
                     scene.init()
                     if opts.scene.obj?
                         scene.add_3dgraphics_obj obj : opts.scene.obj
                     scene.init_done()
-                    callback()
-            # create the 3d renderer
-            opts.scene.opts.callback = init
+                opts.callback? error, scene
+        new Math3dThreeJS opts.element, opts.scene.opts
 
+    switch typeof opts.scene
+        when 'object'
+            create_scene()
+        when 'string'
+            xhr = new XMLHttpRequest()
+
+            xhr.onload = ->
+                try
+                    opts.scene = JSON.parse xhr.responseText
+                catch error
+                    opts.callback? error
+                create_scene()
+            xhr.onerror = ->
+                opts.callback? "error downloading #{opts.scene}"
+            xhr.ontimeout = ->
+                opts.callback? "downloading scene timed out"
+
+            xhr.timeout = opts.timeout
+
+            xhr.open 'get', opts.scene
+            xhr.send()
+        else
+            opts.callback? "bad scene type #{typeof opts.scene}"
             obj = new Math3dThreeJS opts.element, opts.scene.opts
-    ], (error) ->
-        opts.callback? error, scene_obj
-    )
