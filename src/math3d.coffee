@@ -24,92 +24,68 @@
 ###############################################################################
 
 if not document?
-    document = window.document
+    document = @document
 
-math3d = (window.math3d ?= {})
+math3d = (@math3d ?= {})
         
-trunc = (s, max_length) ->
-    if not s?
-        return s
+trunc = (str, max_length) ->
+    if not str?.length?
+        return str
     if not max_length?
         max_length = 1024
-    if s.length > max_length
-        s.slice(0, max_length-3) + "..."
-    else
-        s
+    if str.length > max_length then str.slice(0, max_length-3) + "..." else str
 
-# Returns a new object with properties determined by those of obj1 and
-# obj2.  The properties in obj1 *must* all also appear in obj2.  If an
-# obj2 property has value "defaults.required", then it must appear in
-# obj1.  For each property P of obj2 not specified in obj1, the
-# corresponding value obj1[P] is set (all in a new copy of obj1) to
-# be obj2[P].
-defaults = (obj1, obj2, allow_extra) ->
-    if not obj1?
-        obj1 = {}
-    error = ->
+# Returns a new object with properties determined by those of opts and
+# base.  The properties in opts *must* all also appear in base.  If an
+# base property has value "defaults.required", then it must appear in
+# opts.  For each property prop of base not specified in opts, the
+# corresponding value opts[prop] is set (all in a new copy of opts) to
+# be base[prop].
+defaults = (opts, base) ->
+    if not opts?
+        opts = {}
+    args = ->
         try
-            s = "(obj1=#{trunc(JSON.stringify(obj1),1024)}, obj2=#{trunc(JSON.stringify(obj2),1024)})"
-            #console.log s
-            return s
-        catch error
-            return ""
-    if typeof(obj1) isnt 'object'
+            "(opts=#{trunc JSON.stringify opts}, base=#{trunc JSON.stringify base})"
+        catch
+            ""
+    if typeof(opts) isnt 'object'
         # We put explicit traces before the errors in this function,
         # since otherwise they can be very hard to debug.
         console.trace()
-        throw "defaults -- TypeError: function takes inputs as an object #{error()}"
-    r = {}
-    for prop, val of obj2
-        if obj1.hasOwnProperty(prop) and obj1[prop]?
-            if obj2[prop] is defaults.required and not obj1[prop]?
+        throw "defaults -- TypeError: function takes inputs as an object #{args()}"
+    res = {}
+    for prop, val of base
+        if opts.hasOwnProperty(prop) and opts[prop]?
+            res[prop] = opts[prop]
+        else if val?  # only record not undefined properties
+            if val is defaults.required
                 console.trace()
-                throw "defaults -- TypeError: property '#{prop}' must be specified: #{error()}"
-            r[prop] = obj1[prop]
-        else if obj2[prop]?  # only record not undefined properties
-            if obj2[prop] is defaults.required
-                console.trace()
-                throw "defaults -- TypeError: property '#{prop}' must be specified: #{error()}"
+                throw "defaults -- TypeError: property '#{prop}' must be specified #{args()}"
             else
-                r[prop] = obj2[prop]
-    if not allow_extra
-        for prop, val of obj1
-            if not obj2.hasOwnProperty prop
-                console.trace()
-                throw "defaults -- TypeError: got an unexpected argument '#{prop}' #{error()}"
-    return r
+                res[prop] = val
+    for prop, val of opts
+        if not base.hasOwnProperty(prop)
+            console.trace()
+            throw "defaults -- TypeError: got an unexpected argument '#{prop}' #{args()}"
+    res
 
 # WARNING -- don't accidentally use this as a default:
 required = defaults.required = "__!!!!!!this is a required property!!!!!!__"
 
-component_to_hex = (c) ->
-    hex = c.toString 16
-    if hex.length is 1
-        "0" + hex
-    else
-        hex
+component_to_hex = (component) ->
+    (if component < 16 then "0" else "") + component.toString 16
 
 rgb_to_hex = (r, g, b) -> "#" + component_to_hex(r) + component_to_hex(g) + component_to_hex(b)
 
-_loading_threejs_callbacks = []
-
-math3d.threejs_src = "http://cdnjs.cloudflare.com/ajax/libs/three.js/r68/three.min.js"
-math3d.orbitcontrols_src = "OrbitControls.js"
-
 remove_element = (element) ->
-    if element is null
-        return
-    if (parent = element.parentElement) is null
-        return
-    parent.removeChild element
+    if element? and (parent = element.parentElement)?
+        parent.removeChild element
 
 loadScript = (script_src, callback) ->
     run_callback = true
 
     script = document.createElement 'script'
-    script.type = 'text/javascript'
-    script.async = true
-    script.src = script_src
 
     script.onload = ->
             remove_element script
@@ -122,7 +98,16 @@ loadScript = (script_src, callback) ->
                 run_callback = false
                 callback "error loading script #{script.src}"
 
+    script.type = 'text/javascript'
+    script.async = true
+    script.src = script_src
+
     document.head.appendChild script
+
+_loading_threejs_callbacks = []
+
+math3d.threejs_src = "http://cdnjs.cloudflare.com/ajax/libs/three.js/r68/three.min.js"
+math3d.orbitcontrols_src = "OrbitControls.js"
 
 load_threejs = (callback) ->
     if THREE?.Scene? and THREE?.OrbitControls?
@@ -163,7 +148,7 @@ get_renderer = (scene) ->
         # get the best-possible THREE.js renderer (once and for all)
         # based on Detector.js's webgl detection
         try
-            if window.WebGLRenderingContext
+            if @WebGLRenderingContext
                 canvas = document.createElement 'canvas'
                 if canvas.getContext('webgl') or canvas.getContext('experimental-webgl')
                     dynamic_renderer_type = 'webgl'
@@ -794,7 +779,6 @@ class Math3dThreeJS
 
         @render_scene true
 
-
     animate: (opts = {}) ->
         opts = defaults opts,
             fps       : undefined
@@ -844,7 +828,6 @@ class Math3dThreeJS
             setTimeout f, 1000/opts.fps
         else
             f()
-
 
     render_scene: (force = false) ->
         if @renderer_type is 'static'
@@ -896,18 +879,17 @@ class Math3dThreeJS
                 c = z[1]
                 z[0].scale.set s*c, s*c, s*c
 
-
 math3d.render_3d_scene = (opts) ->
     opts = defaults opts,
-        scene   : required   # {opts:?, obj:?} or url from which to download (via ajax) a JSON string that parses to {opts:?,obj:?}
-        element : required    # DOM element
-        cb      : undefined   # cb(err, scene object)
+        scene    : required    # {opts:?, obj:?} or url from which to download (via ajax) a JSON string that parses to {opts:?,obj:?}
+        element  : required    # DOM element
+        callback : undefined   # callback(error, scene object)
     # Render a 3-d scene
     #console.log("render_3d_scene: url='#{opts.url}'")
 
     scene_obj = undefined
     async.series([
-        (cb) ->
+        (callback) ->
             switch typeof(opts.scene)
                 when 'string'
                     $.ajax(
@@ -916,38 +898,31 @@ math3d.render_3d_scene = (opts) ->
                         success : (data) ->
                             try
                                 opts.scene = JSON.parse data
-                                cb()
-                            catch err
-                                cb err
+                                callback()
+                            catch error
+                                callback error
                     ).fail ->
-                        cb "error downloading #{opts.scene}"
+                        callback "error downloading #{opts.scene}"
                 when 'object'
-                    cb()
+                    callback()
                 else
-                    cb "bad scene value: #{opts.scene}"
-        (cb) ->
+                    callback "bad scene value: #{opts.scene}"
+        (callback) ->
             # do this initialization *after* we create the 3d renderer
-            init = (err, scene) ->
-                if err
-                    cb err
+            init = (error, scene) ->
+                if error
+                    callback err
                 else
                     scene_obj = scene
                     scene.init()
                     if opts.scene.obj?
                         scene.add_3dgraphics_obj obj : opts.scene.obj
                     scene.init_done()
-                    cb()
+                    callback()
             # create the 3d renderer
-            opts.scene.opts ?= {}
             opts.scene.opts.callback = init
 
             obj = new Math3dThreeJS opts.element, opts.scene.opts
-    ], (err) ->
-        opts.cb? err, scene_obj
+    ], (error) ->
+        opts.callback? error, scene_obj
     )
-
-if $?
-    # jQuery plugin for making a DOM object into a 3d renderer
-    $.fn.math3d = (opts = {}) ->
-        @each ->
-            new Math3dThreeJS @, opts
