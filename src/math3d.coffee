@@ -109,7 +109,7 @@ _loading_threejs_callbacks = []
 math3d.threejs_src = "http://cdnjs.cloudflare.com/ajax/libs/three.js/r68/three.min.js"
 math3d.orbitcontrols_src = "OrbitControls.js"
 
-load_threejs = (callback) ->
+math3d.load_threejs = (callback) ->
     if THREE?.Scene? and THREE?.OrbitControls?
         return callback()
 
@@ -129,8 +129,6 @@ load_threejs = (callback) ->
             run_callbacks error
         else
             loadScript math3d.orbitcontrols_src, run_callbacks
-    
-math3d.load_threejs = load_threejs
 
 _scene_using_renderer  = undefined
 _renderer = undefined
@@ -181,7 +179,7 @@ class Math3dThreeJS
             frame           : undefined  # if given call set_frame with opts.frame as input when init_done called
             callback        : undefined  # opts.callback(error, this object)
 
-        load_threejs (error) =>
+        math3d.load_threejs (error) =>
             if error
                 msg = "Error loading THREE.js -- #{error}"
                 if @opts.callback?
@@ -882,7 +880,7 @@ class Math3dThreeJS
 math3d.render_3d_scene = (opts) ->
     opts = defaults opts,
         scene    : required    # {opts:?, obj:?} or url from which to download (via ajax) a JSON string that parses to {opts:?,obj:?}
-        element  : required    # DOM element
+        element  : required    # DOM element to attach to
         callback : undefined   # callback(error, scene object)
     # Render a 3-d scene
     #console.log("render_3d_scene: url='#{opts.url}'")
@@ -911,7 +909,7 @@ math3d.render_3d_scene = (opts) ->
             # do this initialization *after* we create the 3d renderer
             init = (error, scene) ->
                 if error
-                    callback err
+                    callback error
                 else
                     scene_obj = scene
                     scene.init()
