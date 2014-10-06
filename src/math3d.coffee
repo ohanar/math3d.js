@@ -886,41 +886,41 @@ math3d.render_3d_scene = (opts) ->
     # Render a 3-d scene
     #console.log("render_3d_scene: url='#{opts.url}'")
 
-    create_scene = ->
-        if opts.scene.opts?.callback? and opts.callback?
-            orig = opts.scene.opts.callback
-            opts.scene.opts.callback = (error, scene) ->
+    create_scene = (scene) ->
+        if scene.opts?.callback? and opts.callback?
+            orig = scene.opts.callback
+            scene.opts.callback = (error, scene) ->
                 orig error, scene
                 opts.callback error, scene
         else
-            opts.scene.opts ?= {}
-            opts.scene.opts.callback = (error, scene) ->
+            scene.opts ?= {}
+            obj = scene.obj
+            scene.opts.callback = (error, scene) ->
                 if not error
                     scene.init()
-                    if opts.scene.obj?
-                        scene.add_3dgraphics_obj obj : opts.scene.obj
+                    if obj?
+                        scene.add_3dgraphics_obj obj : obj
                     scene.init_done()
                 opts.callback? error, scene
-        new Math3dThreeJS opts.element, opts.scene.opts
+        new Math3dThreeJS opts.element, scene.opts
 
     switch typeof opts.scene
         when 'object'
-            create_scene()
+            create_scene opts.scene
         when 'string'
             xhr = new XMLHttpRequest()
-
-            xhr.onload = ->
-                try
-                    opts.scene = JSON.parse xhr.responseText
-                catch error
-                    opts.callback? error
-                create_scene()
-            xhr.onerror = ->
-                opts.callback? "error downloading #{opts.scene}"
-            xhr.ontimeout = ->
-                opts.callback? "downloading scene timed out"
-
             xhr.timeout = opts.timeout
+            xhr.onreadystatechange = ->
+                if @readyState is @DONE
+                    if @status is 200 # success
+                        try
+                            create_scene JSON.parse @responseText
+                        catch error
+                            opts.callback? error
+                    else if @status
+                        opts.callback? "error #{@status} when downloading #{opts.scene}"
+            xhr.ontimeout = ->
+                opts.callback? "downloading #{opts.scene} timed out"
 
             xhr.open 'get', opts.scene
             xhr.send()
