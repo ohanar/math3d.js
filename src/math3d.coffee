@@ -910,15 +910,18 @@ math3d.render_3d_scene = (opts) ->
         when 'string'
             xhr = new XMLHttpRequest()
             xhr.timeout = opts.timeout
-            xhr.onreadystatechange = ->
-                if @readyState is @DONE
-                    if @status is 200 # success
-                        try
-                            create_scene JSON.parse @responseText
-                        catch error
-                            opts.callback? error
-                    else if @status
-                        opts.callback? "error #{@status} when downloading #{opts.scene}"
+            xhr.onload = ->
+                if @status is 200 # success
+                    try
+                        create_scene JSON.parse @responseText
+                    catch error
+                        opts.callback? error
+                else
+                    opts.callback? "errno #{@status} when trying to download #{opts.scene}"
+            xhr.onerror = ->
+                opts.callback? "error when trying to download #{opts.scene}"
+            xhr.onabort = ->
+                opts.callback? "downloading #{opts.scene} aborted"
             xhr.ontimeout = ->
                 opts.callback? "downloading #{opts.scene} timed out"
 
@@ -926,4 +929,3 @@ math3d.render_3d_scene = (opts) ->
             xhr.send()
         else
             opts.callback? "bad scene type #{typeof opts.scene}"
-            obj = new Math3dThreeJS opts.element, opts.scene.opts
