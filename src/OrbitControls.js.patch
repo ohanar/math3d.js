@@ -1,5 +1,4 @@
 diff --git a/OrbitControls.js.bak b/OrbitControls.js
-index 7408c86..aee2cc3 100644
 --- a/OrbitControls.js
 +++ b/OrbitControls.js
 @@ -21,7 +21,7 @@
@@ -7,7 +6,7 @@ index 7408c86..aee2cc3 100644
  // Simple substitute "OrbitControls" and the control should work as-is.
  
 -THREE.OrbitControls = function ( object, domElement ) {
-+OrbitControls = function ( object, domElement ) {
++var OrbitControls = function ( object, domElement ) {
  
  	this.object = object;
  	this.domElement = ( domElement !== undefined ) ? domElement : document;
