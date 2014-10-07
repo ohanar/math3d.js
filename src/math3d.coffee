@@ -107,10 +107,9 @@ loadScript = (script_src, callback) ->
 _loading_threejs_callbacks = []
 
 math3d.threejs_src = "http://cdnjs.cloudflare.com/ajax/libs/three.js/r68/three.min.js"
-math3d.orbitcontrols_src = "OrbitControls.js"
 
 math3d.load_threejs = (callback) ->
-    if THREE?.Scene? and THREE?.OrbitControls?
+    if THREE? and OrbitControls.prototype?
         return callback()
 
     _loading_threejs_callbacks.push callback
@@ -128,7 +127,8 @@ math3d.load_threejs = (callback) ->
         if (error)
             run_callbacks error
         else
-            loadScript math3d.orbitcontrols_src, run_callbacks
+            OrbitControls.prototype = Object.create THREE.EventDispatcher.prototype
+            run_callbacks()
 
 _scene_using_renderer  = undefined
 _renderer = undefined
@@ -346,7 +346,7 @@ class Math3dThreeJS
 
         # console.log 'set_orbit_controls'
         # set up camera controls
-        @controls = new THREE.OrbitControls @camera, @renderer.domElement
+        @controls = new OrbitControls @camera, @renderer.domElement
         @controls.damping = 2
         @controls.noKeys = true
         @controls.zoomSpeed = 0.4
