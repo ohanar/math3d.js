@@ -106,7 +106,7 @@ loadScript = (script_src, callback) ->
 
 _loading_threejs_callbacks = []
 
-math3d.threejs_src = "http://cdnjs.cloudflare.com/ajax/libs/three.js/r68/three.min.js"
+math3d.threejs_src = "//cdnjs.cloudflare.com/ajax/libs/three.js/r68/three.min.js"
 
 math3d.load_threejs = (callback) ->
     if THREE? and OrbitControls.prototype?
