@@ -1,0 +1,13 @@
+{
+  "name": "math3d.js",
+  "homepage": "https://github.com/ohanar/math3d.js",
+  "version": "0.0.0",
+  "description": "a simple 3d plotter",
+  "main": "build/math3d.min.js",
+  "authors": [
+    "R. Andrew Ohana <andrew.ohana@gmail.com>",
+    "William Stein <wstein@gmail.com>",
+  ],
+  "license": "BSD",
+  "private": true,
+}
