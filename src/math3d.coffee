@@ -27,7 +27,7 @@ if not document?
     document = @document
 
 math3d = (@math3d ?= {})
-        
+
 trunc = (str, max_length) ->
     if not str?.length?
         return str
@@ -171,7 +171,7 @@ class Math3dThreeJS
             width           : undefined
             height          : undefined
             renderer        : undefined  # ignored now
-            background      : "#fafafa"
+            background      : "#ffffff"
             foreground      : undefined
             spin            : false      # if true, image spins by itself when mouse is over it.
             camera_distance : 10
