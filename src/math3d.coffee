@@ -130,11 +130,19 @@ math3d.load_threejs = (callback) ->
             OrbitControls.prototype = Object.create THREE.EventDispatcher.prototype
             run_callbacks()
 
-_scene_using_renderer  = undefined
-_renderer = undefined
-dynamic_renderer_type = undefined
+_scene_using_renderer = undefined
+_renderer = {}
+# get the best-possible THREE.js renderer (once and for all)
+# based on Detector.js's webgl detection
+try
+    if @WebGLRenderingContext
+        canvas = document.createElement 'canvas'
+        if canvas.getContext('webgl') or canvas.getContext('experimental-webgl')
+            _default_renderer_type = 'webgl'
+if not _default_renderer_type?
+    _default_renderer_type = 'canvas'
 
-get_renderer = (scene) ->
+get_renderer = (scene, type) ->
     # if there is a scene currently using this renderer, tell it to switch to
     # the static renderer.
     if _scene_using_renderer? and _scene_using_renderer isnt scene
@@ -142,27 +150,23 @@ get_renderer = (scene) ->
 
     # now scene takes over using this renderer
     _scene_using_renderer = scene
-    if not _renderer?
-        # get the best-possible THREE.js renderer (once and for all)
-        # based on Detector.js's webgl detection
-        try
-            if @WebGLRenderingContext
-                canvas = document.createElement 'canvas'
-                if canvas.getContext('webgl') or canvas.getContext('experimental-webgl')
-                    dynamic_renderer_type = 'webgl'
-        if dynamic_renderer_type is 'webgl'
-            _renderer = new THREE.WebGLRenderer
-                antialias             : true
-                alpha                 : true
-                preserveDrawingBuffer : true
-        else
-            dynamic_renderer_type = 'canvas'
-            _renderer = new THREE.CanvasRenderer
-                antialias : true
-                alpha     : true
-        _renderer.domElement.className = 'math-3d-dynamic-renderer'
 
-    _renderer
+    if not _renderer[type]?
+        switch type
+            when 'webgl'
+                _renderer[type] = new THREE.WebGLRenderer
+                    antialias             : true
+                    alpha                 : true
+                    preserveDrawingBuffer : true
+            when 'canvas'
+                _renderer[type] = new THREE.CanvasRenderer
+                    antialias : true
+                    alpha     : true
+            else
+                throw "bug -- unkown dynamic renderer type = #{type}"
+        _renderer[type].domElement.className = 'math-3d-dynamic-renderer'
+
+    _renderer[type]
 
 class Math3dThreeJS
     constructor: (opts) ->
@@ -170,7 +174,7 @@ class Math3dThreeJS
             parent          : required
             width           : undefined
             height          : undefined
-            renderer        : undefined  # ignored now
+            renderer        : undefined  # 'webgl' or 'canvas' or undefined to choose best
             background      : "#ffffff"
             foreground      : undefined
             spin            : false      # if true, image spins by itself when mouse is over it.
@@ -252,7 +256,7 @@ class Math3dThreeJS
             owner?.set_dynamic_renderer()
 
         # possibly show the canvas warning.
-        if dynamic_renderer_type is 'canvas'
+        if @opts.renderer is 'canvas'
             @element.title = 'WARNING: using slow non-WebGL canvas renderer'
 
     set_dynamic_renderer: ->
@@ -261,7 +265,8 @@ class Math3dThreeJS
             # already have it
             return
 
-        @renderer = get_renderer @
+        @opts.renderer ?= _default_renderer_type
+        @renderer = get_renderer @, @opts.renderer
         @renderer_type = 'dynamic'
 
         # remove the current renderer (if it exists)
@@ -483,7 +488,7 @@ class Math3dThreeJS
         # Why?  Because usually people don't plot a huge number of points, and PointCloudMaterial is SQUARE.
         # By using sprites, our points are round, which is something people really care about.
 
-        switch dynamic_renderer_type
+        switch @opts.renderer
 
             when 'webgl'
                 width         = 50
@@ -525,8 +530,9 @@ class Math3dThreeJS
                 p = @aspect_ratio_scale o.loc
                 particle.position.set p[0], p[1], p[2]
                 @_points.push [particle, 4*o.size/@opts.width]
+
             else
-                throw "bug -- unkown dynamic_renderer_type = #{dynamic_renderer_type}"
+                throw "bug -- unkown dynamic renderer type = #{@opts.renderer}"
 
         @scene.add particle
 
