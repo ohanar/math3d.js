@@ -235,7 +235,7 @@ class Math3dThreeJS
                             z.push 255
                         else
                             z.push 0
-                    @opts.foreground = rgb_to_hex z[0], z[1], z[2]
+                    @opts.foreground = rgb_to_hex z...
 
             @opts.callback? undefined, @
 
@@ -330,16 +330,12 @@ class Math3dThreeJS
     # initialize functions to create new vectors, which take into account the scene's 3d frame aspect ratio.
     init_aspect_ratio_functions: ->
         if @opts.aspect_ratio?
-            x = @opts.aspect_ratio[0]
-            y = @opts.aspect_ratio[1]
-            z = @opts.aspect_ratio[2]
-            @vector3 = (a, b, c) -> new THREE.Vector3 x*a, y*b, z*c
-            @vector  = (v) -> new THREE.Vector3 x*v[0], y*v[1], z*v[2]
-            @aspect_ratio_scale = (v) -> [x*v[0], y*v[1], z*v[2]]
+            [x, y, z] = @opts.aspect_ratio
+            @vector = (a, b, c) -> new THREE.Vector3 x*a, y*b, z*c
+            @aspect_ratio_scale = (a, b, c) -> [x*a, y*b, z*c]
         else
-            @vector3 = (a, b, c) -> new THREE.Vector3 a, b, c
-            @vector  = (v) -> new THREE.Vector3 v[0], v[1], v[2]
-            @aspect_ratio_scale = (v) -> v
+            @vector = (a, b, c) -> new THREE.Vector3 a, b, c
+            @aspect_ratio_scale = (a, b, c) -> [a, b, c]
 
     data_url: (opts) ->
         opts = defaults opts,
@@ -398,7 +394,7 @@ class Math3dThreeJS
 
         for p in [[d,d,d], [d,d,-d], [d,-d,d], [d,-d,-d],[-d,d,d], [-d,d,-d], [-d,-d,d], [-d,-d,-d]]
             directionalLight = new THREE.DirectionalLight color, intensity
-            directionalLight.position.set(p[0], p[1], p[2]).normalize()
+            directionalLight.position.set(p...).normalize()
             @scene.add directionalLight
 
         @light = new THREE.PointLight color
@@ -443,8 +439,8 @@ class Math3dThreeJS
         sprite = new THREE.Sprite spriteMaterial
 
         # Move the sprite to its position
-        p = @aspect_ratio_scale o.pos
-        sprite.position.set p[0], p[1], p[2]
+        position = @aspect_ratio_scale o.pos...
+        sprite.position.set position...
 
         # If the text is supposed to stay constant size, add it to the list of constant size text,
         # which gets resized on scene update.
@@ -468,7 +464,7 @@ class Math3dThreeJS
 
         geometry = new THREE.Geometry()
         for a in o.points
-            geometry.vertices.push @vector a
+            geometry.vertices.push @vector a...
         line = new THREE.Line geometry, new THREE.LineBasicMaterial(color:o.color, linewidth:o.thickness)
         @scene.add line
 
@@ -509,8 +505,8 @@ class Math3dThreeJS
                 spriteMaterial = new THREE.SpriteMaterial map: texture
                 particle = new THREE.Sprite spriteMaterial
 
-                p = @aspect_ratio_scale o.loc
-                particle.position.set p[0], p[1], p[2]
+                position = @aspect_ratio_scale o.loc...
+                particle.position.set position...
                 @_points.push [particle, o.size/200]
 
             when 'canvas'
@@ -524,8 +520,8 @@ class Math3dThreeJS
                     color   : new THREE.Color o.color
                     program : program
                 particle = new THREE.Sprite material
-                p = @aspect_ratio_scale o.loc
-                particle.position.set p[0], p[1], p[2]
+                position = @aspect_ratio_scale o.loc...
+                particle.position.set position...
                 @_points.push [particle, 4*o.size/@opts.width]
 
             else
@@ -537,7 +533,7 @@ class Math3dThreeJS
         geometry = new THREE.Geometry()
 
         for vertex in obj.vertex_geometry
-            geometry.vertices.push @vector vertices
+            geometry.vertices.push @vector vertices...
 
         for points in obj.face_geometry.faces
             a = points.shift()
@@ -625,10 +621,10 @@ class Math3dThreeJS
         mx = (x0+x1)/2
         my = (y0+y1)/2
         mz = (z0+z1)/2
-        @_center = @vector3 mx, my, mz
+        @_center = @vector mx, my, mz
 
         if @camera?
-            d = 1.5*Math.max @aspect_ratio_scale([x1-x0, y1-y0, z1-z0])...
+            d = 1.5*Math.max @aspect_ratio_scale(x1-x0, y1-y0, z1-z0)...
             @camera.position.set mx+d, my+d, mz+d/2
 
         if o.draw
@@ -687,7 +683,7 @@ class Math3dThreeJS
                 txt mx, y1+e, z0, "x=#{l x0, x1}"
                 txt x0, y1+e, z0, l x0
 
-        v = @vector3 mx, my, mz
+        v = @vector mx, my, mz
         @camera.lookAt v
         if @controls?
             @controls.target = @_center
