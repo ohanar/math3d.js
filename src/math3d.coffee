@@ -113,15 +113,12 @@ math3d.load_threejs = (callback) ->
         return callback()
 
     _loading_threejs_callbacks.push callback
-    #console.log("load_threejs")
     if _loading_threejs_callbacks.length > 1
-        #console.log("load_threejs: already loading...")
         return
 
     run_callbacks = (error) ->
-        for callback in _loading_threejs_callbacks
+        while callback = _loading_threejs_callbacks.shift()
             callback error
-        _loading_threejs_callbacks = []
 
     loadScript math3d.threejs_src, (error) ->
         if (error)
@@ -260,7 +257,6 @@ class Math3dThreeJS
             @element.title = 'WARNING: using slow non-WebGL canvas renderer'
 
     set_dynamic_renderer: ->
-        # console.log "dynamic renderer"
         if @renderer_type is 'dynamic'
             # already have it
             return
@@ -288,7 +284,6 @@ class Math3dThreeJS
         @render_scene true
 
     set_static_renderer: ->
-        # console.log "static renderer"
         if @renderer_type is 'static'
             # already have it
             return
@@ -342,14 +337,12 @@ class Math3dThreeJS
         opts = defaults opts,
             type    : 'png'      # 'png' or 'jpeg' or 'webp' (the best)
             quality : undefined   # 1 is best quality; 0 is worst; only applies for jpeg or webp
-        # console.log("taking #{JSON.stringify(opts)} snapshot (length=#{s.length})")
         @renderer.domElement.toDataURL "image/#{opts.type}", opts.quality
 
     init_orbit_controls: ->
         if not @camera?
             @add_camera distance: @opts.camera_distance
 
-        # console.log 'set_orbit_controls'
         # set up camera controls
         @controls = new OrbitControls @camera, @renderer.domElement
         @controls.damping = 2
@@ -388,9 +381,6 @@ class Math3dThreeJS
         @camera.up = new THREE.Vector3 0, 0, 1
 
     init_light: (color= 0xffffff) ->
-
-        # console.log 'init_light'
-
         ambient = new THREE.AmbientLight(0x404040)
         @scene.add ambient
 
@@ -416,7 +406,6 @@ class Math3dThreeJS
             constant_size    : true  # if true, then text is automatically resized when the camera moves;
             # WARNING: if constant_size, don't remove text from scene (or if you do, note that it is slightly inefficient still.)
 
-        #console.log("add_text: #{JSON.stringify(o)}")
         # make an HTML5 2d canvas on which to draw text
         width   = 300  # this determines max text width; beyond this, text is cut off.
         height  = 150
@@ -539,7 +528,6 @@ class Math3dThreeJS
     add_obj: (myobj) ->
         vertices = myobj.vertex_geometry
         for objects in [0...myobj.face_geometry.length]
-            #console.log("object=", JSON.stringify(myobj))
             face3 = myobj.face_geometry[objects].face3
             face4 = myobj.face_geometry[objects].face4
             face5 = myobj.face_geometry[objects].face5
@@ -549,8 +537,6 @@ class Math3dThreeJS
 
             for k in [0...vertices.length] by 3
                 geometry.vertices.push @vector vertices.slice k, k+3
-
-            # console.log("vertices=",JSON.stringify(geometry.vertices))
 
             push_face3 = (a, b, c) ->
                 geometry.faces.push new THREE.Face3 a-1, b-1, c-1
@@ -574,7 +560,6 @@ class Math3dThreeJS
                 push_face4 face5[k],   face5[k+1], face5[k+2], face5[k+4]
                 push_face4 face5[k],   face5[k+2], face5[k+3], face5[k+4]
                 push_face4 face5[k+1], face5[k+2], face5[k+3], face5[k+4]
-           # console.log("faces=",JSON.stringify(geometry.faces))
 
             geometry.mergeVertices()
             #geometry.computeCentroids()
@@ -657,7 +642,6 @@ class Math3dThreeJS
         y1 = o.ymax
         z0 = o.zmin
         z1 = o.zmax
-        # console.log("set_frame: #{JSON.stringify(o)}")
         if Math.abs(x1 - x0) < eps
             x1 += 1
             x0 -= 1
@@ -676,7 +660,6 @@ class Math3dThreeJS
         if @camera?
             d = 1.5*Math.max @aspect_ratio_scale([x1-x0, y1-y0, z1-z0])...
             @camera.position.set mx+d, my+d, mz+d/2
-            # console.log("camera at #{JSON.stringify([mx+d,my+d,mz+d])} pointing at #{JSON.stringify(@_center)}")
 
         if o.draw
             if @frame?
@@ -785,15 +768,12 @@ class Math3dThreeJS
             stop      : false
             mouseover : undefined  # ignored now
             render    : true
-        #console.log("@animate #{@_animate_started}")
         if @_animate_started and not opts.stop
             return
         @_animate_started = true
         @_animate opts
 
     _animate: (opts) ->
-        #console.log("anim?", @element.length, @opts.element.is(":visible"))
-
         if @renderer_type is 'static'
             # will try again when we switch to dynamic renderer
             @_animate_started = false
@@ -802,13 +782,10 @@ class Math3dThreeJS
         #if not $(@element).is ":visible"
         if @element.offsetWidth <= 0 and @element.offsetWidth <= 0
             if @opts.stop_when_gone? and not contains document, @opts.stop_when_gone
-                # console.log("stop_when_gone removed from document -- quit animation completely")
                 @_animate_started = false
             else if not contains document, @element
-                # console.log("element removed from document; wait 5 seconds")
                 setTimeout (=> @_animate opts), 5000
             else
-                # console.log("check again after a second")
                 setTimeout (=> @_animate opts), 1000
             return
 
@@ -886,7 +863,6 @@ math3d.render_3d_scene = (opts) ->
         timeout  : 30000       # milleseconds for timing out fetchs
         callback : undefined   # callback(error, scene object)
     # Render a 3-d scene
-    #console.log("render_3d_scene: url='#{opts.url}'")
 
     create_scene = (scene) ->
         scene.opts ?= {}
