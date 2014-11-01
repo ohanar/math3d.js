@@ -105,11 +105,12 @@ loadScript = (script_src, callback) ->
     document.head.appendChild script
 
 _loading_threejs_callbacks = []
+_orbitcontrols_setup = false
 
 math3d.threejs_src = "//cdnjs.cloudflare.com/ajax/libs/three.js/r68/three.min.js"
 
 math3d.load_threejs = (callback) ->
-    if THREE? and OrbitControls.prototype?
+    if THREE? and _orbitcontrols_setup
         return callback()
 
     _loading_threejs_callbacks.push callback
@@ -120,12 +121,19 @@ math3d.load_threejs = (callback) ->
         while callback = _loading_threejs_callbacks.shift()
             callback error
 
+    setup_orbitcontrols = ->
+        _orbitcontrols_setup = true
+        OrbitControls.prototype = Object.create THREE.EventDispatcher.prototype
+        run_callbacks()
+
+    if THREE?
+        return setup_orbitcontrols()
+
     loadScript math3d.threejs_src, (error) ->
         if (error)
             run_callbacks error
         else
-            OrbitControls.prototype = Object.create THREE.EventDispatcher.prototype
-            run_callbacks()
+            setup_orbitcontrols()
 
 _scene_using_renderer = undefined
 _renderer = {}
