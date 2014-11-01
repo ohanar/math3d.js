@@ -401,7 +401,7 @@ class Math3dThreeJS
         @light.position.set 0, d, 0
 
     add_text: (opts) ->
-        o = defaults opts,
+        opts = defaults opts,
             pos              : [0,0,0]
             text             : required
             fontsize         : 12
@@ -419,14 +419,14 @@ class Math3dThreeJS
         context = canvas.getContext "2d"  # get the drawing context
 
         # set the fontsize and fix for our text.
-        context.font = "Normal " + o.fontsize + "px " + o.fontface
+        context.font = "Normal " + opts.fontsize + "px " + opts.fontface
         context.textAlign = 'center'
 
         # set the color of our text
-        context.fillStyle = o.color
+        context.fillStyle = opts.color
 
         # actually draw the text -- right in the middle of the canvas.
-        context.fillText o.text, width/2, height/2
+        context.fillText opts.text, width/2, height/2
 
         # Make THREE.js texture from our canvas.
         texture = new THREE.Texture canvas
@@ -439,12 +439,12 @@ class Math3dThreeJS
         sprite = new THREE.Sprite spriteMaterial
 
         # Move the sprite to its position
-        position = @aspect_ratio_scale o.pos...
+        position = @aspect_ratio_scale opts.pos...
         sprite.position.set position...
 
         # If the text is supposed to stay constant size, add it to the list of constant size text,
         # which gets resized on scene update.
-        if o.constant_size
+        if opts.constant_size
             if not @_text?
                 @_text = [sprite]
             else
@@ -456,20 +456,20 @@ class Math3dThreeJS
         return sprite
 
     add_line : (opts) ->
-        o = defaults opts,
+        opts = defaults opts,
             points     : required
             thickness  : 1
             color      : "#000000"
             arrow_head : false  # TODO
 
         geometry = new THREE.Geometry()
-        for a in o.points
+        for a in opts.points
             geometry.vertices.push @vector a...
-        line = new THREE.Line geometry, new THREE.LineBasicMaterial(color:o.color, linewidth:o.thickness)
+        line = new THREE.Line geometry, new THREE.LineBasicMaterial(color:opts.color, linewidth:opts.thickness)
         @scene.add line
 
     add_point: (opts) ->
-        o = defaults opts,
+        opts = defaults opts,
             loc  : [0,0,0]
             size : 5
             color: "#000000"
@@ -497,7 +497,7 @@ class Math3dThreeJS
 
                 context.beginPath()
                 context.arc centerX, centerY, radius, 0, 2*Math.PI, false
-                context.fillStyle = o.color
+                context.fillStyle = opts.color
                 context.fill()
 
                 texture = new THREE.Texture canvas
@@ -505,9 +505,9 @@ class Math3dThreeJS
                 spriteMaterial = new THREE.SpriteMaterial map: texture
                 particle = new THREE.Sprite spriteMaterial
 
-                position = @aspect_ratio_scale o.loc...
+                position = @aspect_ratio_scale opts.loc...
                 particle.position.set position...
-                @_points.push [particle, o.size/200]
+                @_points.push [particle, opts.size/200]
 
             when 'canvas'
                 # inspired by http://mrdoob.github.io/three.js/examples/canvas_particles_random.html
@@ -517,12 +517,12 @@ class Math3dThreeJS
                     context.arc 0, 0, 0.5, 0, PI2, true
                     context.fill()
                 material = new THREE.SpriteCanvasMaterial
-                    color   : new THREE.Color o.color
+                    color   : new THREE.Color opts.color
                     program : program
                 particle = new THREE.Sprite material
-                position = @aspect_ratio_scale o.loc...
+                position = @aspect_ratio_scale opts.loc...
                 particle.position.set position...
-                @_points.push [particle, 4*o.size/@opts.width]
+                @_points.push [particle, 4*opts.size/@opts.width]
 
             else
                 throw "bug -- unkown dynamic renderer type = #{@opts.renderer}"
@@ -587,7 +587,7 @@ class Math3dThreeJS
     # controls are sorted out, etc.   Set draw:false, if you don't want to
     # actually *see* a frame.
     set_frame: (opts) ->
-        o = defaults opts,
+        opts = defaults opts,
             xmin      : required
             xmax      : required
             ymin      : required
@@ -600,14 +600,13 @@ class Math3dThreeJS
             fontsize  : 14
             draw      : true
 
-        @_frame_params = o
         eps = 0.1
-        x0 = o.xmin
-        x1 = o.xmax
-        y0 = o.ymin
-        y1 = o.ymax
-        z0 = o.zmin
-        z1 = o.zmax
+        x0 = opts.xmin
+        x1 = opts.xmax
+        y0 = opts.ymin
+        y1 = opts.ymax
+        z0 = opts.zmin
+        z1 = opts.zmax
         if Math.abs(x1 - x0) < eps
             x1 += 1
             x0 -= 1
@@ -627,7 +626,7 @@ class Math3dThreeJS
             d = 1.5*Math.max @aspect_ratio_scale(x1-x0, y1-y0, z1-z0)...
             @camera.position.set mx+d, my+d, mz+d/2
 
-        if o.draw
+        if opts.draw
             if @frame?
                 # remove existing frame
                 for x in @frame
@@ -643,11 +642,11 @@ class Math3dThreeJS
             for points in v
                 line = @add_line
                     points    : points
-                    color     : o.color
-                    thickness : o.thickness
+                    color     : opts.color
+                    thickness : opts.thickness
                 @frame.push line
 
-        if o.draw and o.labels
+        if opts.draw and opts.labels
 
             if @_frame_labels?
                 for x in @_frame_labels
@@ -664,10 +663,17 @@ class Math3dThreeJS
                 return (z*1).toString()
 
             txt = (x, y, z, text) =>
-                @_frame_labels.push @add_text pos:[x,y,z], text:text, fontsize:o.fontsize, color:o.color, constant_size:false
+                @_frame_labels.push(
+                    @add_text
+                        pos           : [x,y,z]
+                        text          : text
+                        fontsize      : opts.fontsize
+                        color         : opts.color
+                        constant_size : false
+                    )
 
             offset = 0.075
-            if o.draw
+            if opts.draw
                 e = (y1 - y0)*offset
                 txt x1, y0-e, z0, l z0
                 txt x1, y0-e, mz, "z=#{l z0, z1}"
