@@ -533,97 +533,59 @@ class Math3dThreeJS
 
         @scene.add particle
 
-    add_obj: (myobj) ->
-        vertices = myobj.vertex_geometry
-        for objects in [0...myobj.face_geometry.length]
-            face3 = myobj.face_geometry[objects].face3
-            face4 = myobj.face_geometry[objects].face4
-            face5 = myobj.face_geometry[objects].face5
+    add_index_face_set: (obj) ->
+        geometry = new THREE.Geometry()
 
-            geometry = new THREE.Geometry()
+        for vertex in obj.vertex_geometry
+            geometry.vertices.push @vector vertices
 
-
-            for k in [0...vertices.length] by 3
-                geometry.vertices.push @vector vertices.slice k, k+3
-
-            push_face3 = (a, b, c) ->
+        for points in obj.face_geometry.faces
+            a = points.shift()
+            b = points.shift()
+            while c = points.shift()
                 geometry.faces.push new THREE.Face3 a-1, b-1, c-1
+                b = c
 
-            # include all faces defined by 3 vertices (triangles)
-            for k in [0...face3.length] by 3
-                push_face3 face3[k], face3[k+1], face3[k+2]
+        geometry.mergeVertices()
+        #geometry.computeCentroids()
+        geometry.computeFaceNormals()
+        #geometry.computeVertexNormals()
+        geometry.computeBoundingSphere()
 
-            # include all faces defined by 4 vertices (squares), which for THREE.js we must define using two triangles
-            push_face4 = (a, b, c, d) ->
-                push_face3 a, b, c
-                push_face3 a, c, d
-
-            for k in [0...face4.length] by 4
-                push_face4 face4[k], face4[k+1], face4[k+2], face4[k+3]
-
-            # include all faces defined by 5 vertices (???), which for THREE.js we must define using ten triangles (?)
-            for k in [0...face5.length] by 5
-                push_face4 face5[k],   face5[k+1], face5[k+2], face5[k+4]
-                push_face4 face5[k],   face5[k+1], face5[k+2], face5[k+3]
-                push_face4 face5[k],   face5[k+1], face5[k+2], face5[k+4]
-                push_face4 face5[k],   face5[k+2], face5[k+3], face5[k+4]
-                push_face4 face5[k+1], face5[k+2], face5[k+3], face5[k+4]
-
-            geometry.mergeVertices()
-            #geometry.computeCentroids()
-            geometry.computeFaceNormals()
-            #geometry.computeVertexNormals()
-            geometry.computeBoundingSphere()
-
-            #finding material key(mk)
-            name = myobj.face_geometry[objects].material_name
-            mk = 0
-            for item in [0..myobj.material.length-1]
-                if name is myobj.material[item].name
-                    mk = item
-                    break
-
-            if @opts.wireframe or myobj.wireframe
-                if myobj.color
-                    color = myobj.color
-                else
-                    c = myobj.material[mk].color
-                    color = "rgb(#{c[0]*255},#{c[1]*255},#{c[2]*255})"
-                if typeof myobj.wireframe is 'number'
-                    line_width = myobj.wireframe
-                else if typeof @opts.wireframe is 'number'
-                    line_width = @opts.wireframe
-                else
-                    line_width = 1
-
-                material = new THREE.MeshBasicMaterial
-                    wireframe          : true
-                    color              : color
-                    wireframeLinewidth : line_width
-                    side               : THREE.DoubleSide
-            else if not myobj.material[mk]?
-                console.log "BUG -- couldn't get material for ", myobj
-                material = new THREE.MeshBasicMaterial
-                    wireframe : false
-                    color     : "#000000"
+        if @opts.wireframe or obj.wireframe
+            if typeof obj.wireframe is 'number'
+                line_width = obj.wireframe
+            else if typeof @opts.wireframe is 'number'
+                line_width = @opts.wireframe
             else
+                line_width = 1
 
-                m = myobj.material[mk]
+            material = new THREE.MeshBasicMaterial
+                wireframe          : true
+                wireframeLinewidth : line_width
+                side               : THREE.DoubleSide
 
-                material =  new THREE.MeshPhongMaterial
-                    shininess   : "1"
-                    ambient     : 0x0ffff
-                    wireframe   : false
-                    transparent : m.opacity < 1
+            material.color.setRGB obj.color...
+        else if not obj.material?
+            console.log "BUG -- couldn't get material for ", obj
+            material = new THREE.MeshBasicMaterial
+                wireframe : false
+                color     : "#000000"
+        else
+            material =  new THREE.MeshPhongMaterial
+                shininess   : "1"
+                ambient     : 0x0ffff
+                wireframe   : false
+                transparent : obj.material.opacity < 1
 
-                material.color.setRGB    m.color[0],    m.color[1],    m.color[2]
-                material.ambient.setRGB  m.ambient[0],  m.ambient[1],  m.ambient[2]
-                material.specular.setRGB m.specular[0], m.specular[1], m.specular[2]
-                material.opacity = m.opacity
+            material.color.setRGB    obj.material.color...
+            material.ambient.setRGB  obj.material.ambient...
+            material.specular.setRGB obj.material.specular...
+            material.opacity = obj.material.opacity
 
-            mesh = new THREE.Mesh geometry, material
-            mesh.position.set 0, 0, 0
-            @scene.add mesh
+        mesh = new THREE.Mesh geometry, material
+        mesh.position.set 0, 0, 0
+        @scene.add mesh
 
     # always call this after adding things to the scene to make sure track
     # controls are sorted out, etc.   Set draw:false, if you don't want to
@@ -740,21 +702,17 @@ class Math3dThreeJS
         for obj in opts.obj
             switch obj.type
                 when 'text'
-                    @add_text
-                        pos           : obj.pos
-                        text          : obj.text
-                        color         : obj.color
-                        fontsize      : obj.fontsize
-                        fontface      : obj.fontface
-                        constant_size : obj.constant_size
+                    delete obj.type
+                    @add_text obj
                 when 'index_face_set'
+                    delete obj.type
                     if opts.wireframe?
                         obj.wireframe = opts.wireframe
-                    @add_obj obj
+                    @add_index_face_set obj
                     if obj.mesh and not obj.wireframe  # draw a wireframe mesh on top of the surface we just drew.
-                        obj.color='#000000'
+                        obj.material.color = [0, 0, 0]
                         obj.wireframe = obj.mesh
-                        @add_obj obj
+                        @add_index_face_set obj
                 when 'line'
                     delete obj.type
                     @add_line obj
@@ -762,8 +720,7 @@ class Math3dThreeJS
                     delete obj.type
                     @add_point obj
                 else
-                    console.log "ERROR: no renderer for model number #{obj.id}"
-                    return
+                    console.log "ERROR: bad object type #{obj.type}"
 
         if opts.set_frame?
             @set_frame opts.set_frame
@@ -877,12 +834,12 @@ math3d.render_3d_scene = (opts) ->
 
         scene.opts.parent = opts.element
 
-        scene.opts.callback = (error, plotter) ->
+        scene.opts.callback = (error, sceneobj) ->
             if not error
                 if scene.obj?
-                    plotter.add_3dgraphics_obj obj : scene.obj
-                plotter.finalize()
-            opts.callback? error, plotter
+                    sceneobj.add_3dgraphics_obj obj : scene.obj
+                sceneobj.finalize()
+            opts.callback? error, sceneobj
 
         new Math3dThreeJS scene.opts
 
