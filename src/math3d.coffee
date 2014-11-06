@@ -250,8 +250,7 @@ class Math3dThreeJS
 
     # client code should call this when done adding objects to the scene
     finalize: ->
-        if @opts.frame?
-            @set_frame @opts.frame
+        @set_frame @opts.frame
 
         if @renderer_type isnt 'dynamic'
             # if we don't have the renderer, swap it in, make a static image, then give it back to whoever had it.
@@ -400,14 +399,25 @@ class Math3dThreeJS
         @light = new THREE.PointLight color
         @light.position.set 0, d, 0
 
+    update_bounding_box: (obj) ->
+        if not obj.geometry.boundingBox?
+            obj.geometry.computeBoundingBox()
+        if @bounding_box?
+            @bounding_box.geometry.boundingBox.union obj.geometry.boundingBox
+        else
+            @bounding_box = new THREE.BoxHelper()
+            @bounding_box.geometry.boundingBox = obj.geometry.boundingBox.clone()
+        @bounding_box.update @bounding_box
+
     add_text: (opts) ->
         opts = defaults opts,
-            pos              : [0,0,0]
+            loc              : [0,0,0]
             text             : required
             fontsize         : 12
             fontface         : 'Arial'
             color            : "#000000"   # anything that is valid to canvas context, e.g., "rgba(249,95,95,0.7)" is also valid.
             constant_size    : true  # if true, then text is automatically resized when the camera moves;
+            in_frame         : true
             # WARNING: if constant_size, don't remove text from scene (or if you do, note that it is slightly inefficient still.)
 
         # make an HTML5 2d canvas on which to draw text
@@ -439,7 +449,7 @@ class Math3dThreeJS
         sprite = new THREE.Sprite spriteMaterial
 
         # Move the sprite to its position
-        position = @aspect_ratio_scale opts.pos...
+        position = @aspect_ratio_scale opts.loc...
         sprite.position.set position...
 
         # If the text is supposed to stay constant size, add it to the list of constant size text,
@@ -451,28 +461,35 @@ class Math3dThreeJS
                 @_text.push sprite
 
         # Finally add the sprite to our scene
+        if opts.in_frame
+            @update_bounding_box sprite
         @scene.add sprite
 
-        return sprite
-
-    add_line : (opts) ->
+    add_line: (opts) ->
         opts = defaults opts,
             points     : required
             thickness  : 1
-            color      : "#000000"
             arrow_head : false  # TODO
+            material   : required
+            in_frame   : true
 
         geometry = new THREE.Geometry()
         for a in opts.points
             geometry.vertices.push @vector a...
-        line = new THREE.Line geometry, new THREE.LineBasicMaterial(color:opts.color, linewidth:opts.thickness)
+
+        line = new THREE.Line geometry, new THREE.LineBasicMaterial(linewidth:opts.thickness)
+        line.material.color.setRGB opts.material.color
+
+        if opts.in_frame
+            @update_bounding_box line
         @scene.add line
 
     add_point: (opts) ->
         opts = defaults opts,
             loc  : [0,0,0]
             size : 5
-            color: "#000000"
+            material: required
+            in_frame: true
 
         if not @_points?
             @_points = []
@@ -497,7 +514,7 @@ class Math3dThreeJS
 
                 context.beginPath()
                 context.arc centerX, centerY, radius, 0, 2*Math.PI, false
-                context.fillStyle = opts.color
+                context.fillStyle = rgb_to_hex opts.material.color...
                 context.fill()
 
                 texture = new THREE.Texture canvas
@@ -517,7 +534,7 @@ class Math3dThreeJS
                     context.arc 0, 0, 0.5, 0, PI2, true
                     context.fill()
                 material = new THREE.SpriteCanvasMaterial
-                    color   : new THREE.Color opts.color
+                    color   : new THREE.Color opts.material.color
                     program : program
                 particle = new THREE.Sprite material
                 position = @aspect_ratio_scale opts.loc...
@@ -527,19 +544,29 @@ class Math3dThreeJS
             else
                 throw "bug -- unkown dynamic renderer type = #{@opts.renderer}"
 
+        if opts.in_frame
+            @update_bounding_box particle
         @scene.add particle
 
-    add_index_face_set: (obj) ->
+    add_index_face_set: (opts) ->
+        opts = defaults opts,
+            vertices    : required
+            faces       : required
+            material    : required
+            wireframe   : undefined
+            in_frame    : true
+
         geometry = new THREE.Geometry()
 
-        for vertex in obj.vertex_geometry
-            geometry.vertices.push @vector vertices...
+        for vector in opts.vertices
+            vector = @vector vector...
+            geometry.vertices.push vector
 
-        for points in obj.face_geometry.faces
-            a = points.shift()
-            b = points.shift()
-            while c = points.shift()
-                geometry.faces.push new THREE.Face3 a-1, b-1, c-1
+        for vertex in opts.faces
+            a = vertex.shift()
+            b = vertex.shift()
+            while c = vertex.shift()
+                geometry.faces.push new THREE.Face3 a, b, c
                 b = c
 
         geometry.mergeVertices()
@@ -548,9 +575,9 @@ class Math3dThreeJS
         #geometry.computeVertexNormals()
         geometry.computeBoundingSphere()
 
-        if @opts.wireframe or obj.wireframe
-            if typeof obj.wireframe is 'number'
-                line_width = obj.wireframe
+        if @opts.wireframe or opts.wireframe
+            if typeof opts.wireframe is 'number'
+                line_width = opts.wireframe
             else if typeof @opts.wireframe is 'number'
                 line_width = @opts.wireframe
             else
@@ -561,26 +588,26 @@ class Math3dThreeJS
                 wireframeLinewidth : line_width
                 side               : THREE.DoubleSide
 
-            material.color.setRGB obj.color...
-        else if not obj.material?
-            console.log "BUG -- couldn't get material for ", obj
-            material = new THREE.MeshBasicMaterial
-                wireframe : false
-                color     : "#000000"
+            material.color.setRGB opts.color...
         else
             material =  new THREE.MeshPhongMaterial
                 shininess   : "1"
                 ambient     : 0x0ffff
                 wireframe   : false
-                transparent : obj.material.opacity < 1
+                transparent : opts.material.opacity < 1
 
-            material.color.setRGB    obj.material.color...
-            material.ambient.setRGB  obj.material.ambient...
-            material.specular.setRGB obj.material.specular...
-            material.opacity = obj.material.opacity
+            material.color.setRGB    opts.material.color...
+            material.ambient.setRGB  opts.material.ambient...
+            material.specular.setRGB opts.material.specular...
+            material.opacity = opts.material.opacity
+
+        material.side = THREE.DoubleSide
 
         mesh = new THREE.Mesh geometry, material
         mesh.position.set 0, 0, 0
+
+        if opts.in_frame
+            @update_bounding_box mesh
         @scene.add mesh
 
     # always call this after adding things to the scene to make sure track
@@ -588,25 +615,13 @@ class Math3dThreeJS
     # actually *see* a frame.
     set_frame: (opts) ->
         opts = defaults opts,
-            xmin      : required
-            xmax      : required
-            ymin      : required
-            ymax      : required
-            zmin      : required
-            zmax      : required
             color     : @opts.foreground
             thickness : .4
             labels    : true  # whether to draw three numerical labels along each of the x, y, and z axes.
             fontsize  : 14
             draw      : true
 
-        eps = 0.1
-        x0 = opts.xmin
-        x1 = opts.xmax
-        y0 = opts.ymin
-        y1 = opts.ymax
-        z0 = opts.zmin
-        z1 = opts.zmax
+        ###
         if Math.abs(x1 - x0) < eps
             x1 += 1
             x0 -= 1
@@ -616,35 +631,26 @@ class Math3dThreeJS
         if Math.abs(z1 - z0) < eps
             z1 += 1
             z0 -= 1
+        ###
 
-        mx = (x0+x1)/2
-        my = (y0+y1)/2
-        mz = (z0+z1)/2
-        @_center = @vector mx, my, mz
+        min = @bounding_box.geometry.boundingBox.min
+        max = @bounding_box.geometry.boundingBox.max
+        avg = min.clone().add(max).divideScalar(2)
+        dim = max.clone().sub(min)
+
+        @_center = @vector avg.x, avg.y, avg.z
 
         if @camera?
-            d = 1.5*Math.max @aspect_ratio_scale(x1-x0, y1-y0, z1-z0)...
-            @camera.position.set mx+d, my+d, mz+d/2
+            d = 1.5*Math.max @aspect_ratio_scale(dim.x, dim.y, dim.z)...
+            @camera.position.set avg.x+d, avg.y+d, avg.z+d/2
 
         if opts.draw
-            if @frame?
-                # remove existing frame
-                for x in @frame
-                    @scene.remove x
-                delete @frame
-            @frame = []
-            # trace the edges of a cube
-            v = [[[x0,y0,z0], [x1,y0,z0], [x1,y1,z0], [x0,y1,z0], [x0,y0,z0],
-                  [x0,y0,z1], [x1,y0,z1], [x1,y1,z1], [x0,y1,z1], [x0,y0,z1]],
-                 [[x1,y0,z0], [x1,y0,z1]],
-                 [[x0,y1,z0], [x0,y1,z1]],
-                 [[x1,y1,z0], [x1,y1,z1]]]
-            for points in v
-                line = @add_line
-                    points    : points
-                    color     : opts.color
-                    thickness : opts.thickness
-                @frame.push line
+            # set the color and linewidth of the bounding box
+            @bounding_box.material.color.setRGB opts.color
+            @bounding_box.material.linewidth = opts.thickness
+
+            # add the bounding box to the scene
+            @scene.add @bounding_box
 
         if opts.draw and opts.labels
 
@@ -654,75 +660,74 @@ class Math3dThreeJS
 
             @_frame_labels = []
 
-            l = (a, b) ->
-                if not b?
-                    z = a
-                else
-                    z = (a+b)/2
-                z = z.toFixed 2
-                return (z*1).toString()
+            format = (num) ->
+                Number(num.toFixed 2).toString()
 
-            txt = (x, y, z, text) =>
+            add_label = (loc, text) =>
                 @_frame_labels.push(
                     @add_text
-                        pos           : [x,y,z]
+                        loc           : loc
                         text          : text
                         fontsize      : opts.fontsize
                         color         : opts.color
                         constant_size : false
+                        in_frame      : false
                     )
 
             offset = 0.075
-            if opts.draw
-                e = (y1 - y0)*offset
-                txt x1, y0-e, z0, l z0
-                txt x1, y0-e, mz, "z=#{l z0, z1}"
-                txt x1, y0-e, z1, l z1
 
-                e = (x1 - x0)*offset
-                txt x1+e, y0, z0, l y0
-                txt x1+e, my, z0, "y=#{l y0, y1}"
-                txt x1+e, y1, z0, l y1
+            e = (max.y - min.y)*offset
+            add_label [max.x, min.y-e, min.z], format(min.z)
+            add_label [max.x, min.y-e, avg.z], "z = #{format avg.z}"
+            add_label [max.x, min.y-e, max.z], format(max.z)
 
-                e = (y1 - y0)*offset
-                txt x1, y1+e, z0, l x1
-                txt mx, y1+e, z0, "x=#{l x0, x1}"
-                txt x0, y1+e, z0, l x0
+            e = (max.x - min.x)*offset
+            add_label [max.x+e, min.y, min.z], format(min.y)
+            add_label [max.x+e, avg.y, min.z], "y = #{format avg.y}"
+            add_label [max.x+e, max.y, min.z], format(max.y)
 
-        v = @vector mx, my, mz
-        @camera.lookAt v
+            e = (max.y - min.y)*offset
+            add_label [max.x, max.y+e, min.z], format(max.x)
+            add_label [avg.x, max.y+e, min.z], "x = #{format avg.x}"
+            add_label [min.x, max.y+e, min.z], format(min.x)
+
+        @camera.lookAt @_center
         if @controls?
             @controls.target = @_center
         @render_scene()
 
-    add_3dgraphics_obj: (opts) ->
+    add_obj: (opts) ->
         opts = defaults opts,
             obj       : required
             wireframe : undefined
             set_frame : undefined
 
-        for obj in opts.obj
-            switch obj.type
-                when 'text'
-                    delete obj.type
-                    @add_text obj
-                when 'index_face_set'
-                    delete obj.type
-                    if opts.wireframe?
-                        obj.wireframe = opts.wireframe
-                    @add_index_face_set obj
-                    if obj.mesh and not obj.wireframe  # draw a wireframe mesh on top of the surface we just drew.
-                        obj.material.color = [0, 0, 0]
-                        obj.wireframe = obj.mesh
-                        @add_index_face_set obj
-                when 'line'
-                    delete obj.type
-                    @add_line obj
-                when 'point'
-                    delete obj.type
-                    @add_point obj
-                else
-                    console.log "ERROR: bad object type #{obj.type}"
+        switch opts.obj.type
+            when 'group'
+                for obj in opts.obj.subobjs
+                    opts.obj = obj
+                    @add_obj opts
+            when 'text'
+                delete opts.obj.type
+                @add_text opts.obj
+            when 'index_face_set'
+                delete opts.obj.type
+                if opts.wireframe?
+                    opts.obj.wireframe = opts.wireframe
+                @add_index_face_set opts.obj
+                if opts.obj.mesh and not opts.obj.wireframe
+                    # draw a wireframe mesh on top of the surface we just drew.
+                    opts.obj.material.color = [0, 0, 0]
+                    opts.obj.wireframe = opts.obj.mesh
+                    @add_index_face_set opts.obj
+            when 'line'
+                delete opts.obj.type
+                @add_line opts.obj
+            when 'point'
+                delete opts.obj.type
+                @add_point opts.obj
+            else
+                console.log "ERROR: bad object type #{opts.obj.type}"
 
         if opts.set_frame?
             @set_frame opts.set_frame
@@ -839,7 +844,7 @@ math3d.render_3d_scene = (opts) ->
         scene.opts.callback = (error, sceneobj) ->
             if not error
                 if scene.obj?
-                    sceneobj.add_3dgraphics_obj obj : scene.obj
+                    sceneobj.add_obj obj : scene.obj
                 sceneobj.finalize()
             opts.callback? error, sceneobj
 
