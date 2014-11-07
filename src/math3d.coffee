@@ -180,13 +180,15 @@ class Math3dThreeJS
             width           : undefined
             height          : undefined
             renderer        : undefined  # 'webgl' or 'canvas' or undefined to choose best
-            background      : "#ffffff"
-            foreground      : undefined
+            background      : [1,1,1]
+            foreground      : undefined  # defaults to the HSL negation of the background
+            frame_color     : undefined  # defaults to the foreground color
+            frame_thickness : .4         # zero thickness disables the frame
+            label_fontsize  : 14         # set to zero to disable labels on the axes
             spin            : false      # if true, image spins by itself when mouse is over it.
             camera_distance : 10
             aspect_ratio    : undefined  # undefined does nothing or a triple [x,y,z] of length three, which scales the x,y,z coordinates of everything by the given values.
             stop_when_gone  : undefined  # if given, animation, etc., stops when this html element (not jquery!) is no longer in the DOM
-            frame           : undefined  # if given call set_frame with opts.frame as input when init_done called
             callback        : undefined  # opts.callback(error, this object)
 
         math3d.load_threejs (error) =>
@@ -220,22 +222,23 @@ class Math3dThreeJS
             @init_light()
 
             # set background color
-            @element.style.background = @opts.background
+            @opts.background = new THREE.Color @opts.background...
+            @element.style.background = @opts.background.getStyle()
 
-            if not @opts.foreground?
-                c = @element.style.background
-                if not c? or -1 is c.indexOf ')'
-                    @opts.foreground = "#000"  # e.g., on firefox - this is best we can do for now
+            if @opts.foreground?
+                @opts.foreground = new THREE.Color @opts.foreground...
+            else
+                @opts.foreground = new THREE.Color()
+                {h, s, l} = @opts.background.getHSL()
+                if h >= 0.5
+                    @opts.foreground.setHSL(h-0.5, s, 1-l)
                 else
-                    i = c.indexOf ')'
-                    z = []
-                    for a in c.slice(4, i).split ','
-                        b = parseInt a
-                        if b < 128
-                            z.push 255
-                        else
-                            z.push 0
-                    @opts.foreground = rgb_to_hex z...
+                    @opts.foreground.setHSL(h+0.5, s, 1-l)
+
+            if @opts.frame_color?
+                @opts.frame_color = new THREE.Color @opts.frame_color...
+            else
+                @opts.frame_color = @opts.foreground
 
             @opts.callback? undefined, @
 
@@ -250,7 +253,7 @@ class Math3dThreeJS
 
     # client code should call this when done adding objects to the scene
     finalize: ->
-        @set_frame @opts.frame
+        @set_frame()
 
         if @renderer_type isnt 'dynamic'
             # if we don't have the renderer, swap it in, make a static image, then give it back to whoever had it.
@@ -613,14 +616,7 @@ class Math3dThreeJS
     # always call this after adding things to the scene to make sure track
     # controls are sorted out, etc.   Set draw:false, if you don't want to
     # actually *see* a frame.
-    set_frame: (opts) ->
-        opts = defaults opts,
-            color     : @opts.foreground
-            thickness : .4
-            labels    : true  # whether to draw three numerical labels along each of the x, y, and z axes.
-            fontsize  : 14
-            draw      : true
-
+    set_frame: ->
         ###
         if Math.abs(x1 - x0) < eps
             x1 += 1
@@ -644,52 +640,52 @@ class Math3dThreeJS
             d = 1.5*Math.max @aspect_ratio_scale(dim.x, dim.y, dim.z)...
             @camera.position.set avg.x+d, avg.y+d, avg.z+d/2
 
-        if opts.draw
+        if @opts.frame_thickness isnt 0
             # set the color and linewidth of the bounding box
-            @bounding_box.material.color.setRGB opts.color
-            @bounding_box.material.linewidth = opts.thickness
+            @bounding_box.material.color = @opts.frame_color
+            @bounding_box.material.linewidth = @opts.frame_thickness
 
             # add the bounding box to the scene
             @scene.add @bounding_box
-
-        if opts.draw and opts.labels
 
             if @_frame_labels?
                 for x in @_frame_labels
                     @scene.remove x
 
-            @_frame_labels = []
+            if @opts.label_fontsize isnt 0
+                @_frame_labels = []
 
-            format = (num) ->
-                Number(num.toFixed 2).toString()
+                format = (num) ->
+                    Number(num.toFixed 2).toString()
 
-            add_label = (loc, text) =>
-                @_frame_labels.push(
-                    @add_text
-                        loc           : loc
-                        text          : text
-                        fontsize      : opts.fontsize
-                        color         : opts.color
-                        constant_size : false
-                        in_frame      : false
-                    )
+                frame_color = @opts.frame_color.getStyle()
+                add_label = (loc, text) =>
+                    @_frame_labels.push(
+                        @add_text
+                            loc           : loc
+                            text          : text
+                            fontsize      : @opts.label_fontsize
+                            color         : frame_color
+                            constant_size : false
+                            in_frame      : false
+                        )
 
-            offset = 0.075
+                offset = 0.075
 
-            e = (max.y - min.y)*offset
-            add_label [max.x, min.y-e, min.z], format(min.z)
-            add_label [max.x, min.y-e, avg.z], "z = #{format avg.z}"
-            add_label [max.x, min.y-e, max.z], format(max.z)
+                e = (max.y - min.y)*offset
+                add_label [max.x, min.y-e, min.z], format(min.z)
+                add_label [max.x, min.y-e, avg.z], "z = #{format avg.z}"
+                add_label [max.x, min.y-e, max.z], format(max.z)
 
-            e = (max.x - min.x)*offset
-            add_label [max.x+e, min.y, min.z], format(min.y)
-            add_label [max.x+e, avg.y, min.z], "y = #{format avg.y}"
-            add_label [max.x+e, max.y, min.z], format(max.y)
+                e = (max.x - min.x)*offset
+                add_label [max.x+e, min.y, min.z], format(min.y)
+                add_label [max.x+e, avg.y, min.z], "y = #{format avg.y}"
+                add_label [max.x+e, max.y, min.z], format(max.y)
 
-            e = (max.y - min.y)*offset
-            add_label [max.x, max.y+e, min.z], format(max.x)
-            add_label [avg.x, max.y+e, min.z], "x = #{format avg.x}"
-            add_label [min.x, max.y+e, min.z], format(min.x)
+                e = (max.y - min.y)*offset
+                add_label [max.x, max.y+e, min.z], format(max.x)
+                add_label [avg.x, max.y+e, min.z], "x = #{format avg.x}"
+                add_label [min.x, max.y+e, min.z], format(min.x)
 
         @camera.lookAt @_center
         if @controls?
@@ -728,9 +724,6 @@ class Math3dThreeJS
                 @add_point opts.obj
             else
                 console.log "ERROR: bad object type #{opts.obj.type}"
-
-        if opts.set_frame?
-            @set_frame opts.set_frame
 
         @render_scene true
 
