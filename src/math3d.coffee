@@ -333,9 +333,11 @@ class Math3dThreeJS
     init_aspect_ratio_functions: ->
         if @opts.aspect_ratio?
             [x, y, z] = @opts.aspect_ratio
-            @vector = (a, b, c) -> new THREE.Vector3 x*a, y*b, z*c
+            @opts.aspect_ratio = new THREE.Vector3 @opts.aspect_ratio...
+            @vector = (a, b, c) -> (new THREE.Vector3 a, b, c).multiply(@opts.aspect_ratio)
             @aspect_ratio_scale = (a, b, c) -> [x*a, y*b, z*c]
         else
+            @opts.aspect_ratio = new THREE.Vector3 1, 1, 1
             @vector = (a, b, c) -> new THREE.Vector3 a, b, c
             @aspect_ratio_scale = (a, b, c) -> [a, b, c]
 
@@ -477,8 +479,8 @@ class Math3dThreeJS
             in_frame   : true
 
         geometry = new THREE.Geometry()
-        for a in opts.points
-            geometry.vertices.push @vector a...
+        for point in opts.points
+            geometry.vertices.push @vector(point...)
 
         line = new THREE.Line geometry, new THREE.LineBasicMaterial(linewidth:opts.thickness)
         line.material.color.setRGB opts.material.color
@@ -562,8 +564,7 @@ class Math3dThreeJS
         geometry = new THREE.Geometry()
 
         for vector in opts.vertices
-            vector = @vector vector...
-            geometry.vertices.push vector
+            geometry.vertices.push @vector(vector...)
 
         for vertex in opts.faces
             a = vertex.shift()
@@ -629,15 +630,15 @@ class Math3dThreeJS
             z0 -= 1
         ###
 
-        min = @bounding_box.geometry.boundingBox.min
-        max = @bounding_box.geometry.boundingBox.max
+        min = @bounding_box.geometry.boundingBox.min.clone()
+        max = @bounding_box.geometry.boundingBox.max.clone()
         avg = min.clone().add(max).divideScalar(2)
         dim = max.clone().sub(min)
 
-        @_center = @vector avg.x, avg.y, avg.z
+        @_center = avg
 
         if @camera?
-            d = 1.5*Math.max @aspect_ratio_scale(dim.x, dim.y, dim.z)...
+            d = 1.5*Math.max(dim.x, dim.y, dim.z)
             @camera.position.set avg.x+d, avg.y+d, avg.z+d/2
 
         if @opts.frame_thickness isnt 0
@@ -654,6 +655,10 @@ class Math3dThreeJS
 
             if @opts.label_fontsize isnt 0
                 @_frame_labels = []
+
+                min.divide @opts.aspect_ratio
+                avg.divide @opts.aspect_ratio
+                max.divide @opts.aspect_ratio
 
                 format = (num) ->
                     Number(num.toFixed 2).toString()
@@ -744,7 +749,6 @@ class Math3dThreeJS
             @_animate_started = false
             return
 
-        #if not $(@element).is ":visible"
         if @element.offsetWidth <= 0 and @element.offsetWidth <= 0
             if @opts.stop_when_gone? and not contains document, @opts.stop_when_gone
                 @_animate_started = false
