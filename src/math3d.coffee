@@ -73,10 +73,11 @@ defaults = (opts, base) ->
 # WARNING -- don't accidentally use this as a default:
 required = defaults.required = "__!!!!!!this is a required property!!!!!!__"
 
-component_to_hex = (component) ->
-    (if component < 16 then "0" else "") + component.toString 16
+rescale_to_hex = (val) ->
+    val = Math.round 255*val
+    (if val < 16 then "0" else "") + val.toString 16
 
-rgb_to_hex = (r, g, b) -> "#" + component_to_hex(r) + component_to_hex(g) + component_to_hex(b)
+rgb_to_hex = (rgb) -> '#'+rgb.map(rescale_to_hex).join('')
 
 remove_element = (element) ->
     if element? and (parent = element.parentElement)?
@@ -179,17 +180,19 @@ class Math3dThreeJS
             parent          : required
             width           : undefined
             height          : undefined
-            renderer        : undefined  # 'webgl' or 'canvas' or undefined to choose best
+            renderer        : undefined # 'webgl' or 'canvas' or undefined to choose best
             background      : [1,1,1]
-            foreground      : undefined  # defaults to the HSL negation of the background
-            frame_color     : undefined  # defaults to the foreground color
-            frame_thickness : .4         # zero thickness disables the frame
-            label_fontsize  : 14         # set to zero to disable labels on the axes
-            spin            : false      # if true, image spins by itself when mouse is over it.
+            spin            : false     # if true, image spins by itself when mouse is over it.
             camera_distance : 10
-            aspect_ratio    : undefined  # undefined does nothing or a triple [x,y,z] of length three, which scales the x,y,z coordinates of everything by the given values.
-            stop_when_gone  : undefined  # if given, animation, etc., stops when this html element (not jquery!) is no longer in the DOM
-            callback        : undefined  # opts.callback(error, this object)
+            aspect_ratio    : undefined # undefined does nothing or a triple [x,y,z] of length three, which scales the x,y,z coordinates of everything by the given values.
+            stop_when_gone  : undefined # if given, animation, etc., stops when this html element (not jquery!) is no longer in the DOM
+            frame           : undefined # frame options
+            callback        : undefined # opts.callback(error, this object)
+
+        @frameOpts = defaults @opts.frame,
+            color           : undefined # defaults to the color-wise negation of the background
+            thickness       : .4        # zero thickness disables the frame
+            fontsize        : 14        # zero fontsize disables labels on the axes
 
         math3d.load_threejs (error) =>
             if error
@@ -222,23 +225,14 @@ class Math3dThreeJS
             @init_light()
 
             # set background color
-            @opts.background = new THREE.Color @opts.background...
-            @element.style.background = @opts.background.getStyle()
+            @background = new THREE.Color @opts.background...
+            @element.style.background = @background.getStyle()
 
-            if @opts.foreground?
-                @opts.foreground = new THREE.Color @opts.foreground...
+            if @frameOpts.color?
+                @frameColor = new THREE.Color @frameOpts.color...
             else
-                @opts.foreground = new THREE.Color()
-                {h, s, l} = @opts.background.getHSL()
-                if h >= 0.5
-                    @opts.foreground.setHSL(h-0.5, s, 1-l)
-                else
-                    @opts.foreground.setHSL(h+0.5, s, 1-l)
-
-            if @opts.frame_color?
-                @opts.frame_color = new THREE.Color @opts.frame_color...
-            else
-                @opts.frame_color = @opts.foreground
+                @frameColor = new THREE.Color(
+                    1-@background.r, 1-@background.g, 1-@background.b)
 
             @opts.callback? undefined, @
 
@@ -254,13 +248,7 @@ class Math3dThreeJS
     # client code should call this when done adding objects to the scene
     finalize: ->
         @set_frame()
-
-        if @renderer_type isnt 'dynamic'
-            # if we don't have the renderer, swap it in, make a static image, then give it back to whoever had it.
-            owner = _scene_using_renderer
-            @set_dynamic_renderer()
-            @set_static_renderer()
-            owner?.set_dynamic_renderer()
+        @render_scene()
 
         # possibly show the canvas warning.
         if @opts.renderer is 'canvas'
@@ -281,7 +269,7 @@ class Math3dThreeJS
         # place renderer in correct place in the DOM
         @element.appendChild @renderer.domElement
 
-        @renderer.setClearColor @opts.background, 1
+        @renderer.setClearColor @background, 1
         @renderer.setSize @opts.width, @opts.height
         if @controls?
             @controls.enabled = true
@@ -404,15 +392,15 @@ class Math3dThreeJS
         @light = new THREE.PointLight color
         @light.position.set 0, d, 0
 
-    update_bounding_box: (obj) ->
+    updateBoundingBox: (obj) ->
         if not obj.geometry.boundingBox?
             obj.geometry.computeBoundingBox()
-        if @bounding_box?
-            @bounding_box.geometry.boundingBox.union obj.geometry.boundingBox
+        if @boundingBox?
+            @boundingBox.geometry.boundingBox.union obj.geometry.boundingBox
         else
-            @bounding_box = new THREE.BoxHelper()
-            @bounding_box.geometry.boundingBox = obj.geometry.boundingBox.clone()
-        @bounding_box.update @bounding_box
+            @boundingBox = new THREE.BoxHelper()
+            @boundingBox.geometry.boundingBox = obj.geometry.boundingBox.clone()
+        @boundingBox.update @boundingBox
 
     add_text: (opts) ->
         opts = defaults opts,
@@ -420,7 +408,7 @@ class Math3dThreeJS
             text             : required
             fontsize         : 12
             fontface         : 'Arial'
-            color            : "#000000"   # anything that is valid to canvas context, e.g., "rgba(249,95,95,0.7)" is also valid.
+            material         : required
             constant_size    : true  # if true, then text is automatically resized when the camera moves;
             in_frame         : true
             # WARNING: if constant_size, don't remove text from scene (or if you do, note that it is slightly inefficient still.)
@@ -431,14 +419,14 @@ class Math3dThreeJS
         canvas = document.createElement 'canvas'
         canvas.width = width
         canvas.height = height
-        context = canvas.getContext "2d"  # get the drawing context
+        context = canvas.getContext '2d'  # get the drawing context
 
         # set the fontsize and fix for our text.
-        context.font = "Normal " + opts.fontsize + "px " + opts.fontface
+        context.font = 'Normal ' + opts.fontsize + 'px ' + opts.fontface
         context.textAlign = 'center'
 
         # set the color of our text
-        context.fillStyle = opts.color
+        context.fillStyle = rgb_to_hex opts.material.color
 
         # actually draw the text -- right in the middle of the canvas.
         context.fillText opts.text, width/2, height/2
@@ -448,7 +436,9 @@ class Math3dThreeJS
         texture.needsUpdate = true
 
         # Make a material out of our texture.
-        spriteMaterial = new THREE.SpriteMaterial map: texture
+        spriteMaterial = new THREE.SpriteMaterial
+            map     : texture
+            opacity : opts.material.opacity
 
         # Make the sprite itself.  (A sprite is a 3d plane that always faces the camera.)
         sprite = new THREE.Sprite spriteMaterial
@@ -467,7 +457,7 @@ class Math3dThreeJS
 
         # Finally add the sprite to our scene
         if opts.in_frame
-            @update_bounding_box sprite
+            @updateBoundingBox sprite
         @scene.add sprite
 
     add_line: (opts) ->
@@ -486,7 +476,7 @@ class Math3dThreeJS
         line.material.color.setRGB opts.material.color
 
         if opts.in_frame
-            @update_bounding_box line
+            @updateBoundingBox line
         @scene.add line
 
     add_point: (opts) ->
@@ -519,12 +509,14 @@ class Math3dThreeJS
 
                 context.beginPath()
                 context.arc centerX, centerY, radius, 0, 2*Math.PI, false
-                context.fillStyle = rgb_to_hex opts.material.color...
+                context.fillStyle = rgb_to_hex opts.material.color
                 context.fill()
 
                 texture = new THREE.Texture canvas
                 texture.needsUpdate = true
-                spriteMaterial = new THREE.SpriteMaterial map: texture
+                spriteMaterial = new THREE.SpriteMaterial
+                    map     : texture
+                    opacity : opts.material.opacity
                 particle = new THREE.Sprite spriteMaterial
 
                 position = @aspect_ratio_scale opts.loc...
@@ -550,7 +542,7 @@ class Math3dThreeJS
                 throw "bug -- unkown dynamic renderer type = #{@opts.renderer}"
 
         if opts.in_frame
-            @update_bounding_box particle
+            @updateBoundingBox particle
         @scene.add particle
 
     add_index_face_set: (opts) ->
@@ -611,7 +603,7 @@ class Math3dThreeJS
         mesh.position.set 0, 0, 0
 
         if opts.in_frame
-            @update_bounding_box mesh
+            @updateBoundingBox mesh
         @scene.add mesh
 
     # always call this after adding things to the scene to make sure track
@@ -630,8 +622,8 @@ class Math3dThreeJS
             z0 -= 1
         ###
 
-        min = @bounding_box.geometry.boundingBox.min.clone()
-        max = @bounding_box.geometry.boundingBox.max.clone()
+        min = @boundingBox.geometry.boundingBox.min.clone()
+        max = @boundingBox.geometry.boundingBox.max.clone()
         avg = min.clone().add(max).divideScalar(2)
         dim = max.clone().sub(min)
 
@@ -641,20 +633,20 @@ class Math3dThreeJS
             d = 1.5*Math.max(dim.x, dim.y, dim.z)
             @camera.position.set avg.x+d, avg.y+d, avg.z+d/2
 
-        if @opts.frame_thickness isnt 0
+        if @frameOpts.thickness isnt 0
             # set the color and linewidth of the bounding box
-            @bounding_box.material.color = @opts.frame_color
-            @bounding_box.material.linewidth = @opts.frame_thickness
+            @boundingBox.material.color = @frameColor
+            @boundingBox.material.linewidth = @frameOpts.thickness
 
             # add the bounding box to the scene
-            @scene.add @bounding_box
+            @scene.add @boundingBox
 
-            if @_frame_labels?
-                for x in @_frame_labels
+            if @_frameLabels?
+                for x in @_frameLabels
                     @scene.remove x
 
-            if @opts.label_fontsize isnt 0
-                @_frame_labels = []
+            if @frameOpts.fontsize isnt 0
+                @_frameLabels = []
 
                 min.divide @opts.aspect_ratio
                 avg.divide @opts.aspect_ratio
@@ -663,45 +655,45 @@ class Math3dThreeJS
                 format = (num) ->
                     Number(num.toFixed 2).toString()
 
-                frame_color = @opts.frame_color.getStyle()
-                add_label = (loc, text) =>
-                    @_frame_labels.push(
+                frameColor = [@frameColor.r, @frameColor.g, @frameColor.b]
+                addLabel = (loc, text) =>
+                    @_frameLabels.push(
                         @add_text
                             loc           : loc
                             text          : text
-                            fontsize      : @opts.label_fontsize
-                            color         : frame_color
+                            fontsize      : @frameOpts.fontsize
                             constant_size : false
                             in_frame      : false
+                            material:
+                                color   : frameColor
+                                opacity : 1
                         )
 
                 offset = 0.075
 
                 e = (max.y - min.y)*offset
-                add_label [max.x, min.y-e, min.z], format(min.z)
-                add_label [max.x, min.y-e, avg.z], "z = #{format avg.z}"
-                add_label [max.x, min.y-e, max.z], format(max.z)
+                addLabel [max.x, min.y-e, min.z], format(min.z)
+                addLabel [max.x, min.y-e, avg.z], "z = #{format avg.z}"
+                addLabel [max.x, min.y-e, max.z], format(max.z)
 
                 e = (max.x - min.x)*offset
-                add_label [max.x+e, min.y, min.z], format(min.y)
-                add_label [max.x+e, avg.y, min.z], "y = #{format avg.y}"
-                add_label [max.x+e, max.y, min.z], format(max.y)
+                addLabel [max.x+e, min.y, min.z], format(min.y)
+                addLabel [max.x+e, avg.y, min.z], "y = #{format avg.y}"
+                addLabel [max.x+e, max.y, min.z], format(max.y)
 
                 e = (max.y - min.y)*offset
-                add_label [max.x, max.y+e, min.z], format(max.x)
-                add_label [avg.x, max.y+e, min.z], "x = #{format avg.x}"
-                add_label [min.x, max.y+e, min.z], format(min.x)
+                addLabel [max.x, max.y+e, min.z], format(max.x)
+                addLabel [avg.x, max.y+e, min.z], "x = #{format avg.x}"
+                addLabel [min.x, max.y+e, min.z], format(min.x)
 
         @camera.lookAt @_center
         if @controls?
             @controls.target = @_center
-        @render_scene()
 
     add_obj: (opts) ->
         opts = defaults opts,
             obj       : required
             wireframe : undefined
-            set_frame : undefined
 
         switch opts.obj.type
             when 'group'
@@ -729,8 +721,6 @@ class Math3dThreeJS
                 @add_point opts.obj
             else
                 console.log "ERROR: bad object type #{opts.obj.type}"
-
-        @render_scene true
 
     animate: (opts = {}) ->
         opts = defaults opts,
@@ -776,8 +766,13 @@ class Math3dThreeJS
             f()
 
     render_scene: (force = false) ->
-        if @renderer_type is 'static'
-            console.log 'render static -- todo'
+        if @renderer_type isnt 'dynamic'
+            # if we don't have the renderer, swap it in, make a static image,
+            # then give it back to whoever had it.
+            owner = _scene_using_renderer
+            @set_dynamic_renderer()
+            @set_static_renderer()
+            owner?.set_dynamic_renderer()
             return
 
         if not @camera?
