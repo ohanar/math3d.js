@@ -360,9 +360,9 @@ class Math3dThreeJS
         @controls.addEventListener 'change', =>
             if @renderer_type is 'dynamic'
                 @rescale_objects()
-                if @_Text3d?
+                if @_text?
                     up = (new THREE.Vector3 0, 1, 0).applyQuaternion @camera.quaternion
-                    for mesh in @_Text3d
+                    for mesh in @_text
                         mesh.up = up.clone()
                         mesh.lookAt @camera.position
                 @renderer.render @scene, @camera
@@ -413,67 +413,29 @@ class Math3dThreeJS
 
     addText: (opts) ->
         opts = defaults opts,
-            loc              : [0,0,0]
-            text             : required
-            fontsize         : 12
-            fontface         : 'Arial'
-            material         : required
-            constant_size    : true  # if true, then text is automatically resized when the camera moves;
-            in_frame         : true
-            # WARNING: if constant_size, don't remove text from scene (or if you do, note that it is slightly inefficient still.)
+            text        : required
+            loc         : [0,0,0]
+            rotation    : undefined # by default will always face the camera
+            size        : 1         # should really be specified
+            material    : required
+            in_frame    : true
 
-        # make an HTML5 2d canvas on which to draw text
-        canvas = document.createElement 'canvas'
-        canvas.width   = 300  # this determines max text width; beyond this, text is cut off.
-        canvas.height  = 150
-        context = canvas.getContext '2d'  # get the drawing context
-
-        # set the fontsize and fix for our text.
-        context.font = 'Bold ' + opts.fontsize + 'px ' + opts.fontface
-        context.textAlign = 'center'
-
-        # set the color of our text
-        context.fillStyle = rgb_to_hex opts.material.color
-
-        # actually draw the text -- right in the middle of the canvas.
-        context.fillText opts.text, canvas.width/2, canvas.height/2
-
-        # Make THREE.js texture from our canvas.
-        texture = new THREE.Texture canvas
-        texture.needsUpdate = true
-
-        # Make a material out of our texture.
-        spriteMaterial = new THREE.SpriteMaterial
-            map     : texture
-
-        # Make the sprite itself.  (A sprite is a 3d plane that always faces the camera.)
-        sprite = new THREE.Sprite spriteMaterial
-
-        # Move the sprite to its position
-        position = @aspect_ratio_scale opts.loc...
-        sprite.position.set position...
-
-        # If the text is supposed to stay constant size, add it to the list of constant size text,
-        # which gets resized on scene update.
-        if opts.constant_size
-            if not @_text?
-                @_text = [sprite]
+        opts.depth = 0
+        text = @addText3d opts
+        if not opts.rotation?
+            if @_text?
+                @_text.push text
             else
-                @_text.push sprite
-
-        # Finally add the sprite to our scene
-        if opts.in_frame
-            @updateBoundingBox sprite
-        @scene.add sprite
-        return sprite
+                @_text = [text]
+        return text
 
     addText3d: (opts) ->
         opts = defaults opts,
             text        : required
             loc         : [0, 0, 0]
-            rotation    : undefined # by default will always face the camera
-            size        : 1
-            depth       : 1
+            rotation    : [0, 0, 0]
+            size        : 1         # should really be specified
+            depth       : 1         # ditto
             material    : required
             in_frame    : true
 
@@ -490,6 +452,7 @@ class Math3dThreeJS
 
         mesh = new THREE.Mesh geometry, material
         mesh.position.set opts.loc...
+        mesh.rotation.set opts.rotation...
 
         geometry.computeBoundingBox()
 
@@ -506,13 +469,6 @@ class Math3dThreeJS
             @matrix.setPosition tmp
 
             @matrixWorldNeedsUpdate = true
-
-        if opts.rotation?
-            mesh.rotation.set opts.rotation...
-        else if @_Text3d?
-            @_Text3d.push mesh
-        else
-            @_Text3d = [mesh]
 
         if opts.in_frame
             @updateBoundingBox mesh
@@ -738,7 +694,6 @@ class Math3dThreeJS
 
                 maxDim = Math.max(dim.x, dim.y, dim.z)
                 textSize = Math.min(dim.x, dim.y, dim.z)/10
-                textDepth = textSize/100
 
                 if textSize is 0
                     return
@@ -746,7 +701,7 @@ class Math3dThreeJS
                 frameColor = [@frameColor.r, @frameColor.g, @frameColor.b]
                 offset = maxDim*0.05
 
-                addLabel = (loc, text) =>
+                addHashMark = (loc) =>
                     loc2 = new THREE.Vector3 loc...
                     if offsetDirection[0] is '+'
                         loc2[offsetDirection[1]] += offset*0.75
@@ -762,18 +717,23 @@ class Math3dThreeJS
                                     color   : frameColor
                                     opacity : 1
 
-                    text = @addText3d
+
+                addLabel = (loc, text) =>
+                    addHashMark loc
+
+                    text = @addText
                             loc         : loc
                             text        : text
                             size        : textSize
-                            depth       : textDepth
                             in_frame    : false
                             material    :
                                     color   : frameColor
                                     opacity : 1
 
+                    # add a bit of extra offset based on the size of the text
                     textBox = text.geometry.boundingBox.size()
                     extraOffset = Math.max(textBox.x, textBox.y, textBox.z)*0.5
+
                     realOffset = offset + extraOffset
                     if offsetDirection[0] is '+'
                         text.position[offsetDirection[1]] += realOffset
@@ -886,12 +846,6 @@ class Math3dThreeJS
         if not s? or (Math.abs(@_last_scale - s) < 0.000001 and not force)
             return
         @_last_scale = s
-        if @_text?
-            for sprite in @_text
-                sprite.scale.set s, s, s
-        if @_frame_labels?
-            for sprite in @_frame_labels
-                sprite.scale.set s, s, s
         if @_points?
             for z in @_points
                 c = z[1]
