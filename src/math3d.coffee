@@ -495,15 +495,15 @@ class Math3dThreeJS
         geometry.computeBoundingBox()
 
         center = geometry.boundingBox.center()
+        tmp = new THREE.Vector3()
 
         # will be called on render, this is used to make
         # mesh.rotation be centered on the center of the text
         mesh.updateMatrix = ->
             @matrix.makeRotationFromQuaternion @quaternion
+            @matrix.scale @scale
 
-            tmp = center.clone().applyMatrix4 @matrix
-            tmp.subVectors @position, tmp
-
+            tmp.copy(center).applyMatrix4(@matrix).subVectors(@position, tmp)
             @matrix.setPosition tmp
 
             @matrixWorldNeedsUpdate = true
