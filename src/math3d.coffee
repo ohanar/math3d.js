@@ -356,6 +356,11 @@ class Math3dThreeJS
         @controls.addEventListener 'change', =>
             if @renderer_type is 'dynamic'
                 @rescale_objects()
+                if @_3dText?
+                    up = (new THREE.Vector3 0, 1, 0).applyQuaternion @camera.quaternion
+                    for mesh in @_3dText
+                        mesh.up = up.clone()
+                        mesh.lookAt @camera.position
                 @renderer.render @scene, @camera
 
     add_camera: (opts) ->
@@ -414,22 +419,20 @@ class Math3dThreeJS
             # WARNING: if constant_size, don't remove text from scene (or if you do, note that it is slightly inefficient still.)
 
         # make an HTML5 2d canvas on which to draw text
-        width   = 300  # this determines max text width; beyond this, text is cut off.
-        height  = 150
         canvas = document.createElement 'canvas'
-        canvas.width = width
-        canvas.height = height
+        canvas.width   = 300  # this determines max text width; beyond this, text is cut off.
+        canvas.height  = 150
         context = canvas.getContext '2d'  # get the drawing context
 
         # set the fontsize and fix for our text.
-        context.font = 'Normal ' + opts.fontsize + 'px ' + opts.fontface
+        context.font = 'Bold ' + opts.fontsize + 'px ' + opts.fontface
         context.textAlign = 'center'
 
         # set the color of our text
         context.fillStyle = rgb_to_hex opts.material.color
 
         # actually draw the text -- right in the middle of the canvas.
-        context.fillText opts.text, width/2, height/2
+        context.fillText opts.text, canvas.width/2, canvas.height/2
 
         # Make THREE.js texture from our canvas.
         texture = new THREE.Texture canvas
@@ -459,6 +462,54 @@ class Math3dThreeJS
         if opts.in_frame
             @updateBoundingBox sprite
         @scene.add sprite
+
+    add_3dtext: (opts) ->
+        opts = defaults opts,
+            text        : required
+            loc         : [0, 0, 0]
+            size        : 1
+            depth       : 1
+            material    : required
+            in_frame    : true
+
+        geometry = new THREE.TextGeometry opts.text,
+            size        : opts.size
+            height      : opts.depth
+            font        : "helvetiker"
+
+        material =  new THREE.MeshBasicMaterial
+            opacity     : opts.material.opacity
+            transparent : opts.material.opacity < 1
+
+        material.color.setRGB    opts.material.color...
+
+        mesh = new THREE.Mesh geometry, material
+        mesh.position.set opts.loc...
+
+        mesh.geometry.computeBoundingBox()
+
+        center = mesh.geometry.boundingBox.center()
+
+        # will be called on render, this is used to make
+        # mesh.rotation be centered on the center of the text
+        mesh.updateMatrix = ->
+            @matrix.makeRotationFromQuaternion @quaternion
+
+            tmp = center.clone().applyMatrix4 @matrix
+            tmp.subVectors @position, tmp
+
+            @matrix.setPosition tmp
+
+            @matrixWorldNeedsUpdate = true
+
+        if not @_3dText?
+            @_3dText = [mesh]
+        else
+            @_3dText.push mesh
+
+        if opts.in_frame
+            @updateBoundingBox mesh
+        @scene.add mesh
 
     add_line: (opts) ->
         opts = defaults opts,
@@ -587,17 +638,14 @@ class Math3dThreeJS
             material.color.setRGB opts.color...
         else
             material =  new THREE.MeshPhongMaterial
-                shininess   : "1"
-                ambient     : 0x0ffff
                 wireframe   : false
                 transparent : opts.material.opacity < 1
+                side        : THREE.DoubleSide
 
             material.color.setRGB    opts.material.color...
             material.ambient.setRGB  opts.material.ambient...
             material.specular.setRGB opts.material.specular...
             material.opacity = opts.material.opacity
-
-        material.side = THREE.DoubleSide
 
         mesh = new THREE.Mesh geometry, material
         mesh.position.set 0, 0, 0
@@ -633,6 +681,10 @@ class Math3dThreeJS
             d = 1.5*Math.max(dim.x, dim.y, dim.z)
             @camera.position.set avg.x+d, avg.y+d, avg.z+d/2
 
+        @camera.lookAt @_center
+        if @controls?
+            @controls.target = @_center
+
         if @frameOpts.thickness isnt 0
             # set the color and linewidth of the bounding box
             @boundingBox.material.color = @frameColor
@@ -652,22 +704,29 @@ class Math3dThreeJS
                 avg.divide @opts.aspect_ratio
                 max.divide @opts.aspect_ratio
 
-                format = (num) ->
-                    Number(num.toFixed 2).toString()
+                textSize = Math.min(dim.x, dim.y, dim.z)/7
+                textDepth = textSize/100
+
+                if textSize is 0
+                    return
 
                 frameColor = [@frameColor.r, @frameColor.g, @frameColor.b]
+
                 addLabel = (loc, text) =>
                     @_frameLabels.push(
-                        @add_text
+                        @add_3dtext
                             loc           : loc
                             text          : text
-                            fontsize      : @frameOpts.fontsize
-                            constant_size : false
+                            size          : textSize
+                            depth         : textDepth
                             in_frame      : false
                             material:
                                 color   : frameColor
                                 opacity : 1
                         )
+
+                format = (num) ->
+                    Number(num.toFixed 2).toString()
 
                 offset = 0.075
 
@@ -685,10 +744,6 @@ class Math3dThreeJS
                 addLabel [max.x, max.y+e, min.z], format(max.x)
                 addLabel [avg.x, max.y+e, min.z], "x = #{format avg.x}"
                 addLabel [min.x, max.y+e, min.z], format(min.x)
-
-        @camera.lookAt @_center
-        if @controls?
-            @controls.target = @_center
 
     add_obj: (opts) ->
         opts = defaults opts,
