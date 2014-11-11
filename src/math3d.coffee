@@ -360,9 +360,9 @@ class Math3dThreeJS
         @controls.addEventListener 'change', =>
             if @renderer_type is 'dynamic'
                 @rescale_objects()
-                if @_3dText?
+                if @_Text3d?
                     up = (new THREE.Vector3 0, 1, 0).applyQuaternion @camera.quaternion
-                    for mesh in @_3dText
+                    for mesh in @_Text3d
                         mesh.up = up.clone()
                         mesh.lookAt @camera.position
                 @renderer.render @scene, @camera
@@ -411,7 +411,7 @@ class Math3dThreeJS
             @boundingBox.geometry.boundingBox = obj.geometry.boundingBox.clone()
         @boundingBox.update @boundingBox
 
-    add_text: (opts) ->
+    addText: (opts) ->
         opts = defaults opts,
             loc              : [0,0,0]
             text             : required
@@ -445,7 +445,6 @@ class Math3dThreeJS
         # Make a material out of our texture.
         spriteMaterial = new THREE.SpriteMaterial
             map     : texture
-            opacity : opts.material.opacity
 
         # Make the sprite itself.  (A sprite is a 3d plane that always faces the camera.)
         sprite = new THREE.Sprite spriteMaterial
@@ -468,7 +467,7 @@ class Math3dThreeJS
         @scene.add sprite
         return sprite
 
-    add_3dtext: (opts) ->
+    addText3d: (opts) ->
         opts = defaults opts,
             text        : required
             loc         : [0, 0, 0]
@@ -510,17 +509,17 @@ class Math3dThreeJS
 
         if opts.rotation?
             mesh.rotation.set opts.rotation...
-        else if @_3dText?
-            @_3dText.push mesh
+        else if @_Text3d?
+            @_Text3d.push mesh
         else
-            @_3dText = [mesh]
+            @_Text3d = [mesh]
 
         if opts.in_frame
             @updateBoundingBox mesh
         @scene.add mesh
         return mesh
 
-    add_line: (opts) ->
+    addLine: (opts) ->
         opts = defaults opts,
             points     : required
             thickness  : 1
@@ -540,7 +539,7 @@ class Math3dThreeJS
         @scene.add line
         return line
 
-    add_point: (opts) ->
+    addPoint: (opts) ->
         opts = defaults opts,
             loc  : [0,0,0]
             size : 5
@@ -577,7 +576,6 @@ class Math3dThreeJS
                 texture.needsUpdate = true
                 spriteMaterial = new THREE.SpriteMaterial
                     map     : texture
-                    opacity : opts.material.opacity
                 particle = new THREE.Sprite spriteMaterial
 
                 position = @aspect_ratio_scale opts.loc...
@@ -607,7 +605,7 @@ class Math3dThreeJS
         @scene.add particle
         return particle
 
-    add_index_face_set: (opts) ->
+    addIndexFaceSet: (opts) ->
         opts = defaults opts,
             vertices    : required
             faces       : required
@@ -666,31 +664,31 @@ class Math3dThreeJS
         @scene.add mesh
         return mesh
 
-    add_group: (opts) ->
+    addGroup: (opts) ->
         opts = defaults opts,
             subobjs     : required
 
-        return opts.subobjs.map @add_obj
+        return opts.subobjs.map @addObj
 
-    add_obj: (opts) ->
+    addObj: (opts) ->
         opts = defaults opts, {type: required}, true
 
         switch opts.type
             when 'group'
                 delete opts.type
-                return @add_group opts
+                return @addGroup opts
             when 'text'
                 delete opts.type
-                return @add_text opts
+                return @addText opts
             when 'index_face_set'
                 delete opts.type
-                return @add_index_face_set opts
+                return @addIndexFaceSet opts
             when 'line'
                 delete opts.type
-                return @add_line opts
+                return @addLine opts
             when 'point'
                 delete opts.type
-                return @add_point opts
+                return @addPoint opts
             else
                 console.log "ERROR: bad object type #{opts.obj.type}"
 
@@ -756,7 +754,7 @@ class Math3dThreeJS
                         loc2[offsetDirection[1]] -= offset*0.75
                     loc2 = [loc2.x, loc2.y, loc2.z]
 
-                    @add_line
+                    @addLine
                             points     : [loc, loc2]
                             thickness  : @frameOpts.thickness*4
                             in_frame   : false
@@ -764,7 +762,7 @@ class Math3dThreeJS
                                     color   : frameColor
                                     opacity : 1
 
-                    text = @add_3dtext
+                    text = @addText3d
                             loc         : loc
                             text        : text
                             size        : textSize
@@ -915,7 +913,7 @@ math3d.render_3d_scene = (opts) ->
         scene.opts.callback = (error, sceneobj) ->
             if not error
                 if scene.obj?
-                    sceneobj.add_obj scene.obj
+                    sceneobj.addObj scene.obj
                 sceneobj.finalize()
             opts.callback? error, sceneobj
 
