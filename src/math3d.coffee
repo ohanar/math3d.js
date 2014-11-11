@@ -192,7 +192,7 @@ class Math3dThreeJS
         @frameOpts = defaults @opts.frame,
             color           : undefined # defaults to the color-wise negation of the background
             thickness       : .4        # zero thickness disables the frame
-            fontsize        : 14        # zero fontsize disables labels on the axes
+            labels          : true      # whether or not to enable labels on the axes
 
         math3d.load_threejs (error) =>
             if error
@@ -467,6 +467,7 @@ class Math3dThreeJS
         opts = defaults opts,
             text        : required
             loc         : [0, 0, 0]
+            rotation    : undefined # by default will always face the camera
             size        : 1
             depth       : 1
             material    : required
@@ -486,9 +487,9 @@ class Math3dThreeJS
         mesh = new THREE.Mesh geometry, material
         mesh.position.set opts.loc...
 
-        mesh.geometry.computeBoundingBox()
+        geometry.computeBoundingBox()
 
-        center = mesh.geometry.boundingBox.center()
+        center = geometry.boundingBox.center()
 
         # will be called on render, this is used to make
         # mesh.rotation be centered on the center of the text
@@ -502,14 +503,17 @@ class Math3dThreeJS
 
             @matrixWorldNeedsUpdate = true
 
-        if not @_3dText?
-            @_3dText = [mesh]
-        else
+        if opts.rotation?
+            mesh.rotation.set opts.rotation...
+        else if @_3dText?
             @_3dText.push mesh
+        else
+            @_3dText = [mesh]
 
         if opts.in_frame
             @updateBoundingBox mesh
         @scene.add mesh
+        return mesh
 
     add_line: (opts) ->
         opts = defaults opts,
@@ -670,10 +674,10 @@ class Math3dThreeJS
             z0 -= 1
         ###
 
-        min = @boundingBox.geometry.boundingBox.min.clone()
-        max = @boundingBox.geometry.boundingBox.max.clone()
-        avg = min.clone().add(max).divideScalar(2)
-        dim = max.clone().sub(min)
+        min = @boundingBox.geometry.boundingBox.min
+        max = @boundingBox.geometry.boundingBox.max
+        avg = @boundingBox.geometry.boundingBox.center()
+        dim = @boundingBox.geometry.boundingBox.size()
 
         @_center = avg
 
@@ -685,7 +689,9 @@ class Math3dThreeJS
         if @controls?
             @controls.target = @_center
 
-        if @frameOpts.thickness isnt 0
+        if @frameOpts.thickness isnt 0 and not @_bounded
+            @_bounded = true
+
             # set the color and linewidth of the bounding box
             @boundingBox.material.color = @frameColor
             @boundingBox.material.linewidth = @frameOpts.thickness
@@ -693,57 +699,71 @@ class Math3dThreeJS
             # add the bounding box to the scene
             @scene.add @boundingBox
 
-            if @_frameLabels?
-                for x in @_frameLabels
-                    @scene.remove x
+            if @frameOpts.labels and not @_labeled
+                @_labeled = true
 
-            if @frameOpts.fontsize isnt 0
-                @_frameLabels = []
-
-                min.divide @opts.aspect_ratio
-                avg.divide @opts.aspect_ratio
-                max.divide @opts.aspect_ratio
-
-                textSize = Math.min(dim.x, dim.y, dim.z)/7
+                maxDim = Math.max(dim.x, dim.y, dim.z)
+                textSize = Math.min(dim.x, dim.y, dim.z)/10
                 textDepth = textSize/100
 
                 if textSize is 0
                     return
 
                 frameColor = [@frameColor.r, @frameColor.g, @frameColor.b]
+                offset = maxDim*0.05
 
                 addLabel = (loc, text) =>
-                    @_frameLabels.push(
-                        @add_3dtext
-                            loc           : loc
-                            text          : text
-                            size          : textSize
-                            depth         : textDepth
-                            in_frame      : false
-                            material:
-                                color   : frameColor
-                                opacity : 1
-                        )
+                    loc2 = new THREE.Vector3 loc...
+                    if offsetDirection[0] is '+'
+                        loc2[offsetDirection[1]] += offset*0.75
+                    else if offsetDirection[0] is '-'
+                        loc2[offsetDirection[1]] -= offset*0.75
+                    loc2 = [loc2.x, loc2.y, loc2.z]
 
-                format = (num) ->
+                    @add_line
+                            points     : [loc, loc2]
+                            thickness  : @frameOpts.thickness*4
+                            in_frame   : false
+                            material   :
+                                    color   : frameColor
+                                    opacity : 1
+
+                    text = @add_3dtext
+                            loc         : loc
+                            text        : text
+                            size        : textSize
+                            depth       : textDepth
+                            in_frame    : false
+                            material    :
+                                    color   : frameColor
+                                    opacity : 1
+
+                    textBox = text.geometry.boundingBox.size()
+                    extraOffset = Math.max(textBox.x, textBox.y, textBox.z)*0.5
+                    realOffset = offset + extraOffset
+                    if offsetDirection[0] is '+'
+                        text.position[offsetDirection[1]] += realOffset
+                    else if offsetDirection[0] is '-'
+                        text.position[offsetDirection[1]] -= realOffset
+
+                format = (vec, coord) =>
+                    num = vec[coord]/@opts.aspect_ratio[coord]
                     Number(num.toFixed 2).toString()
 
-                offset = 0.075
+                offsetDirection = ['-','y']
+                addLabel [max.x, min.y, min.z], format(min, 'z')
+                addLabel [max.x, min.y, avg.z], "z = #{format avg, 'z'}"
+                addLabel [max.x, min.y, max.z], format(max, 'z')
 
-                e = (max.y - min.y)*offset
-                addLabel [max.x, min.y-e, min.z], format(min.z)
-                addLabel [max.x, min.y-e, avg.z], "z = #{format avg.z}"
-                addLabel [max.x, min.y-e, max.z], format(max.z)
+                offsetDirection = ['+','x']
+                addLabel [max.x, min.y, min.z], format(min, 'y')
+                addLabel [max.x, avg.y, min.z], "y = #{format avg, 'y'}"
+                addLabel [max.x, max.y, min.z], format(max, 'y')
 
-                e = (max.x - min.x)*offset
-                addLabel [max.x+e, min.y, min.z], format(min.y)
-                addLabel [max.x+e, avg.y, min.z], "y = #{format avg.y}"
-                addLabel [max.x+e, max.y, min.z], format(max.y)
-
-                e = (max.y - min.y)*offset
-                addLabel [max.x, max.y+e, min.z], format(max.x)
-                addLabel [avg.x, max.y+e, min.z], "x = #{format avg.x}"
-                addLabel [min.x, max.y+e, min.z], format(min.x)
+                offsetDirection = ['+','y']
+                addLabel [max.x, max.y, min.z], format(max, 'x')
+                addLabel [avg.x, max.y, min.z], "x = #{format avg, 'x'}"
+                addLabel [min.x, max.y, min.z], format(min, 'x')
 
     add_obj: (opts) ->
         opts = defaults opts,
