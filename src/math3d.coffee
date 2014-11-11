@@ -33,7 +33,7 @@ trunc = (str, max_length) ->
         return str
     if not max_length?
         max_length = 1024
-    if str.length > max_length then str.slice(0, max_length-3) + "..." else str
+    if str.length > max_length then str[0...max_length-3] + "..." else str
 
 # Returns a new object with properties determined by those of opts and
 # base.  The properties in opts *must* all also appear in base.  If an
@@ -41,7 +41,7 @@ trunc = (str, max_length) ->
 # opts.  For each property prop of base not specified in opts, the
 # corresponding value opts[prop] is set (all in a new copy of opts) to
 # be base[prop].
-defaults = (opts, base) ->
+defaults = (opts, base, allow_extra = false) ->
     if not opts?
         opts = {}
     args = ->
@@ -54,21 +54,25 @@ defaults = (opts, base) ->
         # since otherwise they can be very hard to debug.
         console.trace()
         throw "defaults -- TypeError: function takes inputs as an object #{args()}"
+
+    optsHasProp = (prop) -> opts.hasOwnProperty and opts[prop]?
+
     res = {}
     for prop, val of base
-        if opts.hasOwnProperty(prop) and opts[prop]?
-            res[prop] = opts[prop]
-        else if val?  # only record not undefined properties
+        if val? and not optsHasProp(prop) # only record not undefined properties
             if val is defaults.required
                 console.trace()
                 throw "defaults -- TypeError: property '#{prop}' must be specified #{args()}"
             else
                 res[prop] = val
+
     for prop, val of opts
-        if not base.hasOwnProperty(prop)
+        if not (allow_extra or base.hasOwnProperty(prop))
             console.trace()
             throw "defaults -- TypeError: got an unexpected argument '#{prop}' #{args()}"
-    res
+        if val? # only record not undefined properties
+            res[prop] = val
+    return res
 
 # WARNING -- don't accidentally use this as a default:
 required = defaults.required = "__!!!!!!this is a required property!!!!!!__"
@@ -462,6 +466,7 @@ class Math3dThreeJS
         if opts.in_frame
             @updateBoundingBox sprite
         @scene.add sprite
+        return sprite
 
     add_3dtext: (opts) ->
         opts = defaults opts,
@@ -533,6 +538,7 @@ class Math3dThreeJS
         if opts.in_frame
             @updateBoundingBox line
         @scene.add line
+        return line
 
     add_point: (opts) ->
         opts = defaults opts,
@@ -599,6 +605,7 @@ class Math3dThreeJS
         if opts.in_frame
             @updateBoundingBox particle
         @scene.add particle
+        return particle
 
     add_index_face_set: (opts) ->
         opts = defaults opts,
@@ -657,6 +664,35 @@ class Math3dThreeJS
         if opts.in_frame
             @updateBoundingBox mesh
         @scene.add mesh
+        return mesh
+
+    add_group: (opts) ->
+        opts = defaults opts,
+            subobjs     : required
+
+        return opts.subobjs.map @add_obj
+
+    add_obj: (opts) ->
+        opts = defaults opts, {type: required}, true
+
+        switch opts.type
+            when 'group'
+                delete opts.type
+                return @add_group opts
+            when 'text'
+                delete opts.type
+                return @add_text opts
+            when 'index_face_set'
+                delete opts.type
+                return @add_index_face_set opts
+            when 'line'
+                delete opts.type
+                return @add_line opts
+            when 'point'
+                delete opts.type
+                return @add_point opts
+            else
+                console.log "ERROR: bad object type #{opts.obj.type}"
 
     # always call this after adding things to the scene to make sure track
     # controls are sorted out, etc.   Set draw:false, if you don't want to
@@ -764,38 +800,6 @@ class Math3dThreeJS
                 addLabel [max.x, max.y, min.z], format(max, 'x')
                 addLabel [avg.x, max.y, min.z], "x = #{format avg, 'x'}"
                 addLabel [min.x, max.y, min.z], format(min, 'x')
-
-    add_obj: (opts) ->
-        opts = defaults opts,
-            obj       : required
-            wireframe : undefined
-
-        switch opts.obj.type
-            when 'group'
-                for obj in opts.obj.subobjs
-                    opts.obj = obj
-                    @add_obj opts
-            when 'text'
-                delete opts.obj.type
-                @add_text opts.obj
-            when 'index_face_set'
-                delete opts.obj.type
-                if opts.wireframe?
-                    opts.obj.wireframe = opts.wireframe
-                @add_index_face_set opts.obj
-                if opts.obj.mesh and not opts.obj.wireframe
-                    # draw a wireframe mesh on top of the surface we just drew.
-                    opts.obj.material.color = [0, 0, 0]
-                    opts.obj.wireframe = opts.obj.mesh
-                    @add_index_face_set opts.obj
-            when 'line'
-                delete opts.obj.type
-                @add_line opts.obj
-            when 'point'
-                delete opts.obj.type
-                @add_point opts.obj
-            else
-                console.log "ERROR: bad object type #{opts.obj.type}"
 
     animate: (opts = {}) ->
         opts = defaults opts,
@@ -911,7 +915,7 @@ math3d.render_3d_scene = (opts) ->
         scene.opts.callback = (error, sceneobj) ->
             if not error
                 if scene.obj?
-                    sceneobj.add_obj obj : scene.obj
+                    sceneobj.add_obj scene.obj
                 sceneobj.finalize()
             opts.callback? error, sceneobj
 
