@@ -469,7 +469,7 @@ class Math3dThreeJS
         material.color.setRGB opts.texture.color...
 
         mesh = new THREE.Mesh geometry, material
-        mesh.position.set opts.loc...
+        mesh.position = @vector opts.loc...
         mesh.rotation.set opts.rotation...
 
         geometry.computeBoundingBox()
@@ -540,7 +540,7 @@ class Math3dThreeJS
             material.opacity          = opts.texture.opacity
 
         sphere = new THREE.Mesh geometry, material
-        sphere.position.set opts.loc...
+        sphere.position = @vector opts.loc...
 
         if opts.in_frame
             @updateBoundingBox sphere
@@ -579,8 +579,12 @@ class Math3dThreeJS
             if not @_points?
                 @_points = []
 
+            in_frame = opts.in_frame
+            loc = opts.loc
+
             opts.radius = opts.size/400
             opts._basic_material = true
+            opts.in_frame = false
 
             delete opts.size
             delete opts.use_cloud
@@ -589,6 +593,13 @@ class Math3dThreeJS
 
             @_points.push point
 
+            if in_frame
+                if not @_pointHelper?
+                    @_pointHelper = new THREE.Mesh()
+                    @_pointHelper.geometry.vertices.push undefined
+
+                @_pointHelper.geometry.vertices[0] = @vector loc...
+                @updateBoundingBox @_pointHelper
             return point
 
     addIndexFaceSet: (opts) ->
