@@ -434,7 +434,7 @@ class Math3dThreeJS
             fontface    : undefined # defaults to Text3d's default font
             rotation    : undefined # by default will always face the camera
             size        : 1         # should really be specified
-            material    : required
+            texture     : required
             in_frame    : true
 
         opts.depth = 0
@@ -454,7 +454,7 @@ class Math3dThreeJS
             fontface    : "helvetiker"
             size        : 1         # should really be specified
             depth       : 1         # ditto
-            material    : required
+            texture     : required
             in_frame    : true
 
         geometry = new THREE.TextGeometry opts.text,
@@ -462,11 +462,11 @@ class Math3dThreeJS
             height      : opts.depth
             font        : opts.fontface
 
-        material =  new THREE.MeshBasicMaterial
-            opacity     : opts.material.opacity
-            transparent : opts.material.opacity < 1
+        material = new THREE.MeshBasicMaterial
+            opacity     : opts.texture.opacity
+            transparent : opts.texture.opacity < 1
 
-        material.color.setRGB    opts.material.color...
+        material.color.setRGB opts.texture.color...
 
         mesh = new THREE.Mesh geometry, material
         mesh.position.set opts.loc...
@@ -498,7 +498,7 @@ class Math3dThreeJS
             points     : required
             thickness  : 1
             arrow_head : false  # TODO
-            material   : required
+            texture    : required
             in_frame   : true
 
         geometry = new THREE.Geometry()
@@ -506,7 +506,7 @@ class Math3dThreeJS
             geometry.vertices.push @vector(point...)
 
         line = new THREE.Line geometry, new THREE.LineBasicMaterial(linewidth:opts.thickness)
-        line.material.color.setRGB opts.material.color
+        line.material.color.setRGB opts.texture.color
 
         if opts.in_frame
             @updateBoundingBox line
@@ -517,7 +517,7 @@ class Math3dThreeJS
         opts = defaults opts,
             loc  : [0,0,0]
             size : 5
-            material: required
+            texture: required
             in_frame: true
 
         if not @_points?
@@ -543,7 +543,7 @@ class Math3dThreeJS
 
                 context.beginPath()
                 context.arc centerX, centerY, radius, 0, 2*Math.PI, false
-                context.fillStyle = rgb_to_hex opts.material.color
+                context.fillStyle = rgb_to_hex opts.texture.color
                 context.fill()
 
                 texture = new THREE.Texture canvas
@@ -564,9 +564,9 @@ class Math3dThreeJS
                     context.arc 0, 0, 0.5, 0, PI2, true
                     context.fill()
                 material = new THREE.SpriteCanvasMaterial
-                    color   : new THREE.Color opts.material.color
+                    color   : new THREE.Color opts.texture.color
                     program : program
-                particle = new THREE.Sprite material
+                particle = new THREE.Sprite texture
                 position = @aspect_ratio_scale opts.loc...
                 particle.position.set position...
                 @_points.push [particle, 4*opts.size/@opts.width]
@@ -583,7 +583,7 @@ class Math3dThreeJS
         opts = defaults opts,
             vertices    : required
             faces       : required
-            material    : required
+            texture     : required
             wireframe   : undefined
             in_frame    : true
 
@@ -620,15 +620,15 @@ class Math3dThreeJS
 
             material.color.setRGB opts.color...
         else
-            material =  new THREE.MeshPhongMaterial
+            material = new THREE.MeshPhongMaterial
                 wireframe   : false
-                transparent : opts.material.opacity < 1
+                transparent : opts.texture.opacity < 1
                 side        : THREE.DoubleSide
 
-            material.color.setRGB    opts.material.color...
-            material.ambient.setRGB  opts.material.ambient...
-            material.specular.setRGB opts.material.specular...
-            material.opacity = opts.material.opacity
+            material.color.setRGB    opts.texture.color...
+            material.ambient.setRGB  opts.texture.ambient...
+            material.specular.setRGB opts.texture.specular...
+            material.opacity = opts.texture.opacity
 
         mesh = new THREE.Mesh geometry, material
         mesh.position.set 0, 0, 0
@@ -731,10 +731,9 @@ class Math3dThreeJS
                             points     : [loc, loc2]
                             thickness  : @frameOpts.thickness*4
                             in_frame   : false
-                            material   :
+                            texture    :
                                     color   : frameColor
                                     opacity : 1
-
 
                 addLabel = (loc, text) =>
                     addHashMark loc
@@ -744,7 +743,7 @@ class Math3dThreeJS
                             text        : text
                             size        : textSize
                             in_frame    : false
-                            material    :
+                            texture     :
                                     color   : frameColor
                                     opacity : 1
 
