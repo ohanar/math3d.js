@@ -198,7 +198,7 @@ class Math3dThreeJS
             background      : [1,1,1]
             spin            : false     # if true, image spins by itself when mouse is over it.
             camera_distance : 10
-            aspect_ratio    : undefined # undefined does nothing or a triple [x,y,z] of length three, which scales the x,y,z coordinates of everything by the given values.
+            aspect_ratio    : [1, 1, 1] # a triple [x,y,z] of length three, which scales the x,y,z coordinates of everything by the given values.
             stop_when_gone  : undefined # if given, animation, etc., stops when this html element (not jquery!) is no longer in the DOM
             frame           : undefined # frame options
             callback        : undefined # opts.callback(error, this object)
@@ -218,8 +218,22 @@ class Math3dThreeJS
                 return @opts.callback? undefined, @
             @_init = true
 
-            @init_aspect_ratio_functions()
+            # setup aspect ratio stuff
+            aspectRatio = @aspectRatio = new THREE.Vector3 @opts.aspect_ratio...
+            @squareScale = (new THREE.Vector3 1, 1, 1).normalize()
+            @squareScale.multiplyScalar @aspectRatio.length()
+            @rescale = (vector) -> vector.multiply aspectRatio
 
+            # setup color stuff
+            @background = new THREE.Color @opts.background...
+            @element.style.background = @background.getStyle()
+            if @frameOpts.color?
+                @frameColor = new THREE.Color @frameOpts.color...
+            else
+                @frameColor = new THREE.Color(
+                    1-@background.r, 1-@background.g, 1-@background.b)
+
+            # initialize the scene
             @scene = new THREE.Scene()
 
             # IMPORTANT: There is a major bug in three.js -- if you make the width below more than .5 of the window
@@ -238,16 +252,6 @@ class Math3dThreeJS
             # add a bunch of lights
             @init_light()
 
-            # set background color
-            @background = new THREE.Color @opts.background...
-            @element.style.background = @background.getStyle()
-
-            if @frameOpts.color?
-                @frameColor = new THREE.Color @frameOpts.color...
-            else
-                @frameColor = new THREE.Color(
-                    1-@background.r, 1-@background.g, 1-@background.b)
-
             @opts.callback? undefined, @
 
     attach_to_dom: (parent_element) ->
@@ -262,6 +266,19 @@ class Math3dThreeJS
     # client code should call this when done adding objects to the scene
     finalize: ->
         @set_frame()
+
+        @_center = @rescale @boundingBox.geometry.boundingBox.center()
+
+        @camera.lookAt @_center
+        @controls.target = @_center
+
+        dim = @rescale @boundingBox.geometry.boundingBox.size()
+
+        maxDim = Math.max dim.x, dim.y, dim.z
+
+        @camera.position.set 1.5, 1.5, 0.75
+        @camera.position.multiplyScalar(maxDim).add @_center
+
         @render_scene()
 
         # possibly show the canvas warning.
@@ -331,16 +348,6 @@ class Math3dThreeJS
         @element.onclick = =>
             @setDynamicRenderer()
 
-    # initialize functions to create new vectors, which take into account the scene's 3d frame aspect ratio.
-    init_aspect_ratio_functions: ->
-        if @opts.aspect_ratio?
-            [x, y, z] = @opts.aspect_ratio
-            @aspectRatio = new THREE.Vector3 @opts.aspect_ratio...
-            @vector = (a, b, c) -> (new THREE.Vector3 a, b, c).multiply(@aspectRatio)
-        else
-            @aspectRatio = new THREE.Vector3 1, 1, 1
-            @vector = (a, b, c) -> new THREE.Vector3 a, b, c
-
     data_url: (opts) ->
         opts = defaults opts,
             type    : 'png'      # 'png' or 'jpeg' or 'webp' (the best)
@@ -356,8 +363,6 @@ class Math3dThreeJS
         @controls.damping = 2
         @controls.noKeys = true
         @controls.zoomSpeed = 0.4
-        if @_center?
-            @controls.target = @_center
         if @opts.spin
             if typeof @opts.spin is "boolean"
                 @controls.autoRotateSpeed = 2.0
@@ -368,12 +373,18 @@ class Math3dThreeJS
         up = new THREE.Vector3()
         @controls.addEventListener 'change', =>
             if @renderer_type is 'dynamic'
-                @rescaleObjects()
+
+                if @_center? and @_points?
+                    scale = @camera.position.distanceTo @_center
+                    for point in @_points
+                        point.scale.set scale, scale, scale
+
                 if @_text?
                     up.set(0, 1, 0).applyQuaternion @camera.quaternion
                     for mesh in @_text
                         mesh.up = up.clone()
                         mesh.lookAt @camera.position
+
                 @renderer.render @scene, @camera
 
     add_camera: (opts) ->
@@ -420,9 +431,13 @@ class Math3dThreeJS
         @boundingBox.update @boundingBox
 
     _finalizeObj: (obj, in_frame) ->
+        obj.scale.copy @aspectRatio
+
         if in_frame
             @updateBoundingBox obj
+
         @scene.add obj
+
         return obj
 
     addText: (opts) ->
@@ -467,7 +482,7 @@ class Math3dThreeJS
         material.color.setRGB opts.texture.color...
 
         text = new THREE.Mesh geometry, material
-        text.position.copy(@vector opts.loc...)
+        @rescale text.position.set(opts.loc...)
         text.rotation.set opts.rotation...
 
         geometry.computeBoundingBox()
@@ -486,7 +501,9 @@ class Math3dThreeJS
 
             @matrixWorldNeedsUpdate = true
 
-        return @_finalizeObj text, opts.in_frame
+        @_finalizeObj text, opts.in_frame
+        text.scale.copy @squareScale
+        return text
 
     addLine: (opts) ->
         opts = defaults opts,
@@ -498,12 +515,12 @@ class Math3dThreeJS
 
         geometry = new THREE.Geometry()
         for point in opts.points
-            geometry.vertices.push @vector(point...)
+            geometry.vertices.push new THREE.Vector3(point...)
 
         line = new THREE.Line geometry, new THREE.LineBasicMaterial(linewidth:opts.thickness)
         line.material.color.setRGB opts.texture.color...
 
-        return @_finalizeObj line
+        return @_finalizeObj line, opts.in_frame
 
     addSphere: (opts) ->
         opts = defaults opts,
@@ -532,7 +549,7 @@ class Math3dThreeJS
             material.opacity          = opts.texture.opacity
 
         sphere = new THREE.Mesh geometry, material
-        sphere.position.copy(@vector opts.loc...)
+        @rescale sphere.position.set(opts.loc...)
 
         return @_finalizeObj sphere, opts.in_frame
 
@@ -541,7 +558,7 @@ class Math3dThreeJS
             loc         : [0,0,0]
             size        : 5
             texture     : required
-            use_cloud   : false
+            use_cloud   : false     # faster, but you have to use square points
             in_frame    : true
 
         if opts.use_cloud
@@ -557,9 +574,10 @@ class Math3dThreeJS
                 material.color.setRGB opts.texture.color...
                 cloud = (@_cloud[key] = new THREE.PointCloud(
                                             new THREE.Geometry(), material))
+                cloud.scale.copy @aspectRatio
                 @scene.add cloud
 
-            cloud.geometry.vertices.push @vector(opts.loc...)
+            cloud.geometry.vertices.push new THREE.Vector3(opts.loc...)
 
             if opts.in_frame
                 @updateBoundingBox cloud
@@ -571,7 +589,7 @@ class Math3dThreeJS
             in_frame = opts.in_frame
             loc = opts.loc
 
-            opts.radius = opts.size/400
+            opts.radius = opts.size/1200
             opts._basic_material = true
             opts.in_frame = false
 
@@ -585,9 +603,9 @@ class Math3dThreeJS
             if in_frame
                 if not @_pointHelper?
                     @_pointHelper = new THREE.Mesh()
-                    @_pointHelper.geometry.vertices.push undefined
+                    @_pointHelper.geometry.vertices.push new THREE.Vector3()
 
-                @_pointHelper.geometry.vertices[0] = @vector loc...
+                @_pointHelper.geometry.vertices[0].set loc...
                 @updateBoundingBox @_pointHelper
             return point
 
@@ -602,7 +620,7 @@ class Math3dThreeJS
         geometry = new THREE.Geometry()
 
         for vector in opts.vertices
-            geometry.vertices.push @vector(vector...)
+            geometry.vertices.push new THREE.Vector3(vector...)
 
         for vertex in opts.faces
             a = vertex.shift()
@@ -694,21 +712,6 @@ class Math3dThreeJS
             z0 -= 1
         ###
 
-        min = @boundingBox.geometry.boundingBox.min
-        max = @boundingBox.geometry.boundingBox.max
-        avg = @boundingBox.geometry.boundingBox.center()
-        dim = @boundingBox.geometry.boundingBox.size()
-
-        @_center = avg
-
-        if @camera?
-            d = 1.5*Math.max(dim.x, dim.y, dim.z)
-            @camera.position.set avg.x+d, avg.y+d, avg.z+d/2
-
-        @camera.lookAt @_center
-        if @controls?
-            @controls.target = @_center
-
         if @frameOpts.thickness isnt 0 and not @_bounded
             @_bounded = true
 
@@ -716,32 +719,49 @@ class Math3dThreeJS
             @boundingBox.material.color = @frameColor
             @boundingBox.material.linewidth = @frameOpts.thickness
 
+            # set the scale for the bounding box
+            @boundingBox.scale.copy @aspectRatio
+
+            # the update method of BoxHelper disables matrixAutoUpdate but
+            # we still need it for the aspect ratio to be taken into account
+            @boundingBox.matrixAutoUpdate = true
+
             # add the bounding box to the scene
             @scene.add @boundingBox
 
             if @frameOpts.labels and not @_labeled
                 @_labeled = true
 
-                maxDim = Math.max(dim.x, dim.y, dim.z)
-                textSize = Math.min(dim.x, dim.y, dim.z)/10
+                min = @boundingBox.geometry.boundingBox.min
+                max = @boundingBox.geometry.boundingBox.max
+                avg = @boundingBox.geometry.boundingBox.center()
+
+                dim = @rescale @boundingBox.geometry.boundingBox.size()
+
+                maxDim = Math.max dim.x, dim.y, dim.z
+                minDim = Math.min dim.x, dim.y, dim.z
+
+                offset = maxDim*0.05
+                offsets = (new THREE.Vector3 offset, offset, offset).divide @aspectRatio
+
+                textSize = minDim/@squareScale.length()/6
 
                 if textSize is 0
                     return
 
                 frameColor = [@frameColor.r, @frameColor.g, @frameColor.b]
-                offset = maxDim*0.05
 
                 addHashMark = (loc) =>
                     loc2 = new THREE.Vector3 loc...
-                    if offsetDirection[0] is '+'
-                        loc2[offsetDirection[1]] += offset*0.75
-                    else if offsetDirection[0] is '-'
-                        loc2[offsetDirection[1]] -= offset*0.75
+                    if offsetDir[0] is '+'
+                        loc2[offsetDir[1]] += offsets[offsetDir[1]]*0.75
+                    else if offsetDir[0] is '-'
+                        loc2[offsetDir[1]] -= offsets[offsetDir[1]]*0.75
                     loc2 = [loc2.x, loc2.y, loc2.z]
 
                     @addLine
                             points     : [loc, loc2]
-                            thickness  : @frameOpts.thickness*4
+                            thickness  : @frameOpts.thickness*5
                             in_frame   : false
                             texture    :
                                     color   : frameColor
@@ -760,33 +780,33 @@ class Math3dThreeJS
                                     opacity : 1
 
                     # add a bit of extra offset based on the size of the text
-                    textBox = text.geometry.boundingBox.size()
+                    # TODO: this is still not right for aspect ratio != identity
+                    textBox = text.geometry.boundingBox.size().multiply @squareScale
                     extraOffset = Math.max(textBox.x, textBox.y, textBox.z)*0.5
 
-                    realOffset = offset + extraOffset
-                    if offsetDirection[0] is '+'
-                        text.position[offsetDirection[1]] += realOffset
-                    else if offsetDirection[0] is '-'
-                        text.position[offsetDirection[1]] -= realOffset
+                    realOffset = offsets[offsetDir[1]] + extraOffset
+                    if offsetDir[0] is '+'
+                        text.position[offsetDir[1]] += realOffset
+                    else if offsetDir[0] is '-'
+                        text.position[offsetDir[1]] -= realOffset
 
-                format = (vec, coord) =>
-                    num = vec[coord]/@aspectRatio[coord]
+                format = (num) ->
                     Number(num.toFixed 2).toString()
 
-                offsetDirection = ['-','y']
-                addLabel [max.x, min.y, min.z], format(min, 'z')
-                addLabel [max.x, min.y, avg.z], "z = #{format avg, 'z'}"
-                addLabel [max.x, min.y, max.z], format(max, 'z')
+                offsetDir = ['-','y']
+                addLabel [max.x, min.y, min.z], format(min.z)
+                addLabel [max.x, min.y, avg.z], "z = #{format avg.z}"
+                addLabel [max.x, min.y, max.z], format(max.z)
 
-                offsetDirection = ['+','x']
-                addLabel [max.x, min.y, min.z], format(min, 'y')
-                addLabel [max.x, avg.y, min.z], "y = #{format avg, 'y'}"
-                addLabel [max.x, max.y, min.z], format(max, 'y')
+                offsetDir = ['+','x']
+                addLabel [max.x, min.y, min.z], format(min.y)
+                addLabel [max.x, avg.y, min.z], "y = #{format avg.y}"
+                addLabel [max.x, max.y, min.z], format(max.y)
 
-                offsetDirection = ['+','y']
-                addLabel [max.x, max.y, min.z], format(max, 'x')
-                addLabel [avg.x, max.y, min.z], "x = #{format avg, 'x'}"
-                addLabel [min.x, max.y, min.z], format(min, 'x')
+                offsetDir = ['+','y']
+                addLabel [max.x, max.y, min.z], format(max.x)
+                addLabel [avg.x, max.y, min.z], "x = #{format avg.x}"
+                addLabel [min.x, max.y, min.z], format(min.x)
 
     animate: (opts = {}) ->
         opts = defaults opts,
@@ -859,25 +879,7 @@ class Math3dThreeJS
         if not new_pos and not force
             return
 
-        # rescale all objects in scene
-        @rescaleObjects()
-
         @renderer.render @scene, @camera
-
-    _rescaleFactor: ->
-        if not @_center?
-            return undefined
-        else
-            return @camera.position.distanceTo(@_center) / 3
-
-    rescaleObjects: (force = false) ->
-        scale = @_rescaleFactor()
-        if not scale? or (Math.abs(@_lastScale - scale) < 0.000001 and not force)
-            return
-        if @_points?
-            for z in @_points
-                z.scale.set scale, scale, scale
-        @_lastScale = scale
 
 math3d.render_3d_scene = (opts) ->
     opts = defaults opts,
