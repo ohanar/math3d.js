@@ -335,13 +335,11 @@ class Math3dThreeJS
     init_aspect_ratio_functions: ->
         if @opts.aspect_ratio?
             [x, y, z] = @opts.aspect_ratio
-            @opts.aspect_ratio = new THREE.Vector3 @opts.aspect_ratio...
-            @vector = (a, b, c) -> (new THREE.Vector3 a, b, c).multiply(@opts.aspect_ratio)
-            @aspect_ratio_scale = (a, b, c) -> [x*a, y*b, z*c]
+            @aspectRatio = new THREE.Vector3 @opts.aspect_ratio...
+            @vector = (a, b, c) -> (new THREE.Vector3 a, b, c).multiply(@aspectRatio)
         else
-            @opts.aspect_ratio = new THREE.Vector3 1, 1, 1
+            @aspectRatio = new THREE.Vector3 1, 1, 1
             @vector = (a, b, c) -> new THREE.Vector3 a, b, c
-            @aspect_ratio_scale = (a, b, c) -> [a, b, c]
 
     data_url: (opts) ->
         opts = defaults opts,
@@ -463,7 +461,7 @@ class Math3dThreeJS
         material.color.setRGB opts.texture.color...
 
         mesh = new THREE.Mesh geometry, material
-        mesh.position = @vector opts.loc...
+        mesh.position.copy(@vector opts.loc...)
         mesh.rotation.set opts.rotation...
 
         geometry.computeBoundingBox()
@@ -534,7 +532,7 @@ class Math3dThreeJS
             material.opacity          = opts.texture.opacity
 
         sphere = new THREE.Mesh geometry, material
-        sphere.position = @vector opts.loc...
+        sphere.position.copy(@vector opts.loc...)
 
         if opts.in_frame
             @updateBoundingBox sphere
@@ -778,7 +776,7 @@ class Math3dThreeJS
                         text.position[offsetDirection[1]] -= realOffset
 
                 format = (vec, coord) =>
-                    num = vec[coord]/@opts.aspect_ratio[coord]
+                    num = vec[coord]/@aspectRatio[coord]
                     Number(num.toFixed 2).toString()
 
                 offsetDirection = ['-','y']
