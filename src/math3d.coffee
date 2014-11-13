@@ -419,6 +419,12 @@ class Math3dThreeJS
             @boundingBox.geometry.boundingBox = obj.geometry.boundingBox.clone()
         @boundingBox.update @boundingBox
 
+    _finalizeObj: (obj, in_frame) ->
+        if in_frame
+            @updateBoundingBox obj
+        @scene.add obj
+        return obj
+
     addText: (opts) ->
         opts = defaults opts,
             text        : required
@@ -460,9 +466,9 @@ class Math3dThreeJS
 
         material.color.setRGB opts.texture.color...
 
-        mesh = new THREE.Mesh geometry, material
-        mesh.position.copy(@vector opts.loc...)
-        mesh.rotation.set opts.rotation...
+        text = new THREE.Mesh geometry, material
+        text.position.copy(@vector opts.loc...)
+        text.rotation.set opts.rotation...
 
         geometry.computeBoundingBox()
 
@@ -470,8 +476,8 @@ class Math3dThreeJS
         tmp = new THREE.Vector3()
 
         # will be called on render, this is used to make
-        # mesh.rotation be centered on the center of the text
-        mesh.updateMatrix = ->
+        # text.rotation be centered on the center of the text
+        text.updateMatrix = ->
             @matrix.makeRotationFromQuaternion @quaternion
             @matrix.scale @scale
 
@@ -480,10 +486,7 @@ class Math3dThreeJS
 
             @matrixWorldNeedsUpdate = true
 
-        if opts.in_frame
-            @updateBoundingBox mesh
-        @scene.add mesh
-        return mesh
+        return @_finalizeObj text, opts.in_frame
 
     addLine: (opts) ->
         opts = defaults opts,
@@ -500,10 +503,7 @@ class Math3dThreeJS
         line = new THREE.Line geometry, new THREE.LineBasicMaterial(linewidth:opts.thickness)
         line.material.color.setRGB opts.texture.color...
 
-        if opts.in_frame
-            @updateBoundingBox line
-        @scene.add line
-        return line
+        return @_finalizeObj line
 
     addSphere: (opts) ->
         opts = defaults opts,
@@ -534,10 +534,7 @@ class Math3dThreeJS
         sphere = new THREE.Mesh geometry, material
         sphere.position.copy(@vector opts.loc...)
 
-        if opts.in_frame
-            @updateBoundingBox sphere
-        @scene.add sphere
-        return sphere
+        return @_finalizeObj sphere, opts.in_frame
 
     addPoint: (opts) ->
         opts = defaults opts,
@@ -647,10 +644,7 @@ class Math3dThreeJS
         mesh = new THREE.Mesh geometry, material
         mesh.position.set 0, 0, 0
 
-        if opts.in_frame
-            @updateBoundingBox mesh
-        @scene.add mesh
-        return mesh
+        return @_finalizeObj mesh, opts.in_frame
 
     addGroup: (opts) ->
         opts = defaults opts,
