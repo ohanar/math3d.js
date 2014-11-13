@@ -655,6 +655,8 @@ class Math3dThreeJS
                 return @addGroup opts
             when 'text'
                 return @addText opts
+            when 'text3d'
+                return @addText3d opts
             when 'index_face_set'
                 return @addIndexFaceSet opts
             when 'line'
