@@ -77,12 +77,6 @@ defaults = (opts, base, allow_extra = false) ->
 # WARNING -- don't accidentally use this as a default:
 required = defaults.required = "__!!!!!!this is a required property!!!!!!__"
 
-rescale_to_hex = (val) ->
-    val = Math.round 255*val
-    (if val < 16 then "0" else "") + val.toString 16
-
-rgb_to_hex = (rgb) -> '#'+rgb.map(rescale_to_hex).join('')
-
 removeElement = (element) ->
     if element? and (parent = element.parentElement)?
         parent.removeChild element
