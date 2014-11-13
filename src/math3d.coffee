@@ -647,21 +647,19 @@ class Math3dThreeJS
     addObj: (opts) ->
         opts = defaults opts, {type: required}, true
 
-        switch opts.type
+        type = opts.type
+        delete opts.type
+
+        switch type
             when 'group'
-                delete opts.type
                 return @addGroup opts
             when 'text'
-                delete opts.type
                 return @addText opts
             when 'index_face_set'
-                delete opts.type
                 return @addIndexFaceSet opts
             when 'line'
-                delete opts.type
                 return @addLine opts
             when 'point'
-                delete opts.type
                 return @addPoint opts
             else
                 console.log "ERROR: bad object type #{opts.obj.type}"
