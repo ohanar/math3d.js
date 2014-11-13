@@ -83,62 +83,78 @@ rescale_to_hex = (val) ->
 
 rgb_to_hex = (rgb) -> '#'+rgb.map(rescale_to_hex).join('')
 
-remove_element = (element) ->
+removeElement = (element) ->
     if element? and (parent = element.parentElement)?
         parent.removeChild element
 
 loadScript = (script_src, callback) ->
-    run_callback = true
+    runCallback = true
 
     script = document.createElement 'script'
 
     script.onload = ->
-            remove_element script
-            if run_callback
-                run_callback = false
+            removeElement script
+            if runCallback
+                runCallback = false
                 callback()
     script.onerror = ->
-            remove_element script
-            if run_callback
-                run_callback = false
+            removeElement script
+            if runCallback
+                runCallback = false
                 callback "error loading script #{script.src}"
 
     script.type = 'text/javascript'
+    script.charset = 'utf-8'
     script.async = true
     script.src = script_src
 
     document.head.appendChild script
 
-_loading_threejs_callbacks = []
-_orbitcontrols_setup = false
+_loadingThreejsCallbacks = []
+_orbitControlsSetup = false
 
-math3d.threejs_src = "//cdnjs.cloudflare.com/ajax/libs/three.js/r68/three.min.js"
+math3d.threejsSource = "//cdnjs.cloudflare.com/ajax/libs/three.js/r68/three.min.js"
+math3d.fontSources = []
 
-math3d.load_threejs = (callback) ->
-    if THREE? and _orbitcontrols_setup
+math3d.loadThreejs = (callback) ->
+    if THREE? and _orbitControlsSetup and not math3d.fontsSources.length
         return callback()
 
-    _loading_threejs_callbacks.push callback
-    if _loading_threejs_callbacks.length > 1
+    _loadingThreejsCallbacks.push callback
+    if _loadingThreejsCallbacks.length > 1
         return
 
-    run_callbacks = (error) ->
-        while callback = _loading_threejs_callbacks.shift()
+    runCallbacks = (error) ->
+        while callback = _loadingThreejsCallbacks.shift()
             callback error
 
-    setup_orbitcontrols = ->
-        _orbitcontrols_setup = true
-        OrbitControls.prototype = Object.create THREE.EventDispatcher.prototype
-        run_callbacks()
+    setupOrbitControls = (callback) ->
+        if not _orbitControlsSetup
+            OrbitControls.prototype = Object.create THREE.EventDispatcher.prototype
+            _orbitControlsSetup = true
+        callback()
 
-    if THREE?
-        return setup_orbitcontrols()
-
-    loadScript math3d.threejs_src, (error) ->
-        if (error)
-            run_callbacks error
+    setupFonts = (callback) ->
+        if math3d.fontSources.length
+            loadScript math3d.fontSources.shift(), (error) ->
+                if error
+                    runCallbacks error
+                else
+                    setupFonts callback
         else
-            setup_orbitcontrols()
+            callback()
+
+    setupThreejs = (callback) ->
+        if THREE?
+            callback()
+        else
+            loadScript math3d.threejsSource, (error) ->
+                if error
+                    runCallbacks error
+                else
+                    callback()
+
+    setupThreejs (-> setupFonts (-> setupOrbitControls runCallbacks))
 
 _scene_using_renderer = undefined
 _renderer = {}
@@ -198,7 +214,7 @@ class Math3dThreeJS
             thickness       : .4        # zero thickness disables the frame
             labels          : true      # whether or not to enable labels on the axes
 
-        math3d.load_threejs (error) =>
+        math3d.loadThreejs (error) =>
             if error
                 return @opts.callback? error
 
@@ -242,7 +258,7 @@ class Math3dThreeJS
 
     attach_to_dom: (parent_element) ->
         if @element?
-            remove_element @element
+            removeElement @element
         else
             @element = document.createElement 'span'
             @element.className = 'math-3d-viewer'
@@ -268,7 +284,7 @@ class Math3dThreeJS
         @renderer_type = 'dynamic'
 
         # remove the current renderer (if it exists)
-        remove_element @element.lastChild
+        removeElement @element.lastChild
 
         # place renderer in correct place in the DOM
         @element.appendChild @renderer.domElement
@@ -304,7 +320,7 @@ class Math3dThreeJS
             @last_canvas_target = @controls.target
 
         # remove the current renderer (if it exists)
-        remove_element @element.lastChild
+        removeElement @element.lastChild
 
         # place renderer in correct place in the DOM
         @element.appendChild @static_image
@@ -415,6 +431,7 @@ class Math3dThreeJS
         opts = defaults opts,
             text        : required
             loc         : [0,0,0]
+            fontface    : undefined # defaults to Text3d's default font
             rotation    : undefined # by default will always face the camera
             size        : 1         # should really be specified
             material    : required
@@ -434,6 +451,7 @@ class Math3dThreeJS
             text        : required
             loc         : [0, 0, 0]
             rotation    : [0, 0, 0]
+            fontface    : "helvetiker"
             size        : 1         # should really be specified
             depth       : 1         # ditto
             material    : required
@@ -442,7 +460,7 @@ class Math3dThreeJS
         geometry = new THREE.TextGeometry opts.text,
             size        : opts.size
             height      : opts.depth
-            font        : "helvetiker"
+            font        : opts.fontface
 
         material =  new THREE.MeshBasicMaterial
             opacity     : opts.material.opacity
