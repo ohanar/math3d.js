@@ -506,7 +506,7 @@ class Math3dThreeJS
             geometry.vertices.push @vector(point...)
 
         line = new THREE.Line geometry, new THREE.LineBasicMaterial(linewidth:opts.thickness)
-        line.material.color.setRGB opts.texture.color
+        line.material.color.setRGB opts.texture.color...
 
         if opts.in_frame
             @updateBoundingBox line
@@ -653,7 +653,9 @@ class Math3dThreeJS
         opts = defaults opts,
             subobjs     : required
 
-        return opts.subobjs.map @addObj
+        ret = for obj in opts.subobjs
+            @addObj obj
+        return ret
 
     addObj: (opts) ->
         opts = defaults opts, {type: required}, true
