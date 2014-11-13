@@ -418,8 +418,7 @@ class Math3dThreeJS
         @light.position.set 0, d, 0
 
     updateBoundingBox: (obj) ->
-        if not obj.geometry.boundingBox?
-            obj.geometry.computeBoundingBox()
+        obj.geometry.computeBoundingBox()
         if @boundingBox?
             @boundingBox.geometry.boundingBox.union obj.geometry.boundingBox
         else
@@ -515,93 +514,81 @@ class Math3dThreeJS
 
     addSphere: (opts) ->
         opts = defaults opts,
-            loc         : [0,0,0]
-            radius      : 5
-            texture     : required
-            in_frame    : true
+            loc             : [0,0,0]
+            radius          : 5
+            texture         : required
+            in_frame        : true
+            _basic_material : false
 
         geometry = new THREE.SphereGeometry opts.radius, 32, 32
 
-        material = new THREE.MeshPhongMaterial
-            transparent : opts.texture.opacity < 1
-            side        : THREE.DoubleSide
+        if opts._basic_material
+            material = new THREE.MeshBasicMaterial
+                transparent : opts.texture.opacity < 1
 
-        material.color.setRGB       opts.texture.color...
-        material.ambient.setRGB     opts.texture.ambient...
-        material.specular.setRGB    opts.texture.specular...
-        material.opacity          = opts.texture.opacity
+            material.color.setRGB       opts.texture.color...
 
-        mesh = new THREE.Mesh geometry, material
+        else
+            material = new THREE.MeshPhongMaterial
+                transparent : opts.texture.opacity < 1
+                side        : THREE.DoubleSide
+
+            material.color.setRGB       opts.texture.color...
+            material.ambient.setRGB     opts.texture.ambient...
+            material.specular.setRGB    opts.texture.specular...
+            material.opacity          = opts.texture.opacity
+
+        sphere = new THREE.Mesh geometry, material
+        sphere.position.set opts.loc...
+
         if opts.in_frame
-            @updateBoundingBox mesh
-        @scene.add mesh
-        return mesh
+            @updateBoundingBox sphere
+        @scene.add sphere
+        return sphere
 
     addPoint: (opts) ->
         opts = defaults opts,
             loc         : [0,0,0]
             size        : 5
             texture     : required
+            use_cloud   : false
             in_frame    : true
 
-        if not @_points?
-            @_points = []
+        if opts.use_cloud
+            if not @_cloud
+                @_cloud = {}
 
-        # IMPORTANT: Below we use sprites instead of the more natural/faster PointCloudMaterial.
-        # Why?  Because usually people don't plot a huge number of points, and PointCloudMaterial is SQUARE.
-        # By using sprites, our points are round, which is something people really care about.
+            key = opts.size+opts.texture.color+opts.in_frame
 
-        switch @opts.renderer
+            if not (cloud = @_cloud[key])?
+                material = new THREE.PointCloudMaterial
+                    size            : opts.size*2
+                    sizeAttenuation : false
+                material.color.setRGB opts.texture.color...
+                cloud = (@_cloud[key] = new THREE.PointCloud(
+                                            new THREE.Geometry(), material))
+                @scene.add cloud
 
-            when 'webgl'
-                width         = 50
-                height        = 50
-                canvas        = document.createElement 'canvas'
-                canvas.width  = width
-                canvas.height = height
+            cloud.geometry.vertices.push @vector(opts.loc...)
 
-                context       = canvas.getContext '2d'  # get the drawing context
-                centerX       = width/2
-                centerY       = height/2
-                radius        = 25
+            if opts.in_frame
+                @updateBoundingBox cloud
+            return cloud
+        else
+            if not @_points?
+                @_points = []
 
-                context.beginPath()
-                context.arc centerX, centerY, radius, 0, 2*Math.PI, false
-                context.fillStyle = rgb_to_hex opts.texture.color
-                context.fill()
+            opts.radius = opts.size/400
+            opts._basic_material = true
 
-                texture = new THREE.Texture canvas
-                texture.needsUpdate = true
-                spriteMaterial = new THREE.SpriteMaterial
-                    map     : texture
-                particle = new THREE.Sprite spriteMaterial
+            delete opts.size
+            delete opts.use_cloud
 
-                position = @aspect_ratio_scale opts.loc...
-                particle.position.set position...
-                @_points.push [particle, opts.size/200]
+            point = @addSphere opts
 
-            when 'canvas'
-                # inspired by http://mrdoob.github.io/three.js/examples/canvas_particles_random.html
-                PI2 = Math.PI * 2
-                program = (context) ->
-                    context.beginPath()
-                    context.arc 0, 0, 0.5, 0, PI2, true
-                    context.fill()
-                material = new THREE.SpriteCanvasMaterial
-                    color   : new THREE.Color opts.texture.color
-                    program : program
-                particle = new THREE.Sprite texture
-                position = @aspect_ratio_scale opts.loc...
-                particle.position.set position...
-                @_points.push [particle, 4*opts.size/@opts.width]
+            @_points.push point
 
-            else
-                throw "bug -- unkown dynamic renderer type = #{@opts.renderer}"
-
-        if opts.in_frame
-            @updateBoundingBox particle
-        @scene.add particle
-        return particle
+            return point
 
     addIndexFaceSet: (opts) ->
         opts = defaults opts,
@@ -872,26 +859,25 @@ class Math3dThreeJS
         if not new_pos and not force
             return
 
-        # rescale all text in scene
-        @rescale_objects()
+        # rescale all objects in scene
+        @rescaleObjects()
 
         @renderer.render @scene, @camera
 
-    _rescale_factor: ->
+    _rescaleFactor: ->
         if not @_center?
             return undefined
         else
             return @camera.position.distanceTo(@_center) / 3
 
-    rescale_objects: (force = false) ->
-        s = @_rescale_factor()
-        if not s? or (Math.abs(@_last_scale - s) < 0.000001 and not force)
+    rescaleObjects: (force = false) ->
+        scale = @_rescaleFactor()
+        if not scale? or (Math.abs(@_lastScale - scale) < 0.000001 and not force)
             return
-        @_last_scale = s
         if @_points?
             for z in @_points
-                c = z[1]
-                z[0].scale.set s*c, s*c, s*c
+                z.scale.set scale, scale, scale
+        @_lastScale = scale
 
 math3d.render_3d_scene = (opts) ->
     opts = defaults opts,
