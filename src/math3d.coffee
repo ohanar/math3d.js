@@ -150,7 +150,7 @@ math3d.loadThreejs = (callback) ->
 
     setupThreejs (-> setupFonts (-> setupOrbitControls runCallbacks))
 
-_scene_using_renderer = undefined
+_sceneUsingRenderer = undefined
 _renderer = {}
 # get the best-possible THREE.js renderer (once and for all)
 # based on Detector.js's webgl detection
@@ -158,18 +158,18 @@ try
     if @WebGLRenderingContext
         canvas = document.createElement 'canvas'
         if canvas.getContext('webgl') or canvas.getContext('experimental-webgl')
-            _default_renderer_type = 'webgl'
-if not _default_renderer_type?
-    _default_renderer_type = 'canvas'
+            _defaultRendererType = 'webgl'
+if not _defaultRendererType?
+    _defaultRendererType = 'canvas'
 
-get_renderer = (scene, type) ->
+getRenderer = (scene, type) ->
     # if there is a scene currently using this renderer, tell it to switch to
     # the static renderer.
-    if _scene_using_renderer? and _scene_using_renderer isnt scene
-        _scene_using_renderer.set_static_renderer()
+    if _sceneUsingRenderer? and _sceneUsingRenderer isnt scene
+        _sceneUsingRenderer.setStaticRenderer()
 
     # now scene takes over using this renderer
-    _scene_using_renderer = scene
+    _sceneUsingRenderer = scene
 
     if not _renderer[type]?
         switch type
@@ -231,7 +231,7 @@ class Math3dThreeJS
 
             @opts.height = if @opts.height? then @opts.height else @opts.width*2/3
 
-            @set_dynamic_renderer()
+            @setDynamicRenderer()
             @init_orbit_controls()
             @init_on_mouseover()
 
@@ -268,13 +268,13 @@ class Math3dThreeJS
         if @opts.renderer is 'canvas'
             @element.title = 'WARNING: using slow non-WebGL canvas renderer'
 
-    set_dynamic_renderer: ->
+    setDynamicRenderer: ->
         if @renderer_type is 'dynamic'
             # already have it
             return
 
-        @opts.renderer ?= _default_renderer_type
-        @renderer = get_renderer @, @opts.renderer
+        @opts.renderer ?= _defaultRendererType
+        @renderer = getRenderer @, @opts.renderer
         @renderer_type = 'dynamic'
 
         # remove the current renderer (if it exists)
@@ -295,7 +295,7 @@ class Math3dThreeJS
             @animate render: false
         @render_scene true
 
-    set_static_renderer: ->
+    setStaticRenderer: ->
         if @renderer_type is 'static'
             # already have it
             return
@@ -323,13 +323,13 @@ class Math3dThreeJS
     init_on_mouseover: ->
 
         @element.onmouseenter = =>
-            @set_dynamic_renderer()
+            @setDynamicRenderer()
 
         @element.onmouseleave = =>
-            @set_static_renderer()
+            @setStaticRenderer()
 
         @element.onclick = =>
-            @set_dynamic_renderer()
+            @setDynamicRenderer()
 
     # initialize functions to create new vectors, which take into account the scene's 3d frame aspect ratio.
     init_aspect_ratio_functions: ->
@@ -843,10 +843,10 @@ class Math3dThreeJS
         if @renderer_type isnt 'dynamic'
             # if we don't have the renderer, swap it in, make a static image,
             # then give it back to whoever had it.
-            owner = _scene_using_renderer
-            @set_dynamic_renderer()
-            @set_static_renderer()
-            owner?.set_dynamic_renderer()
+            owner = _sceneUsingRenderer
+            @setDynamicRenderer()
+            @setStaticRenderer()
+            owner?.setDynamicRenderer()
             return
 
         if not @camera?
