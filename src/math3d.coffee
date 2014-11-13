@@ -513,12 +513,36 @@ class Math3dThreeJS
         @scene.add line
         return line
 
+    addSphere: (opts) ->
+        opts = defaults opts,
+            loc         : [0,0,0]
+            radius      : 5
+            texture     : required
+            in_frame    : true
+
+        geometry = new THREE.SphereGeometry opts.radius, 32, 32
+
+        material = new THREE.MeshPhongMaterial
+            transparent : opts.texture.opacity < 1
+            side        : THREE.DoubleSide
+
+        material.color.setRGB       opts.texture.color...
+        material.ambient.setRGB     opts.texture.ambient...
+        material.specular.setRGB    opts.texture.specular...
+        material.opacity          = opts.texture.opacity
+
+        mesh = new THREE.Mesh geometry, material
+        if opts.in_frame
+            @updateBoundingBox mesh
+        @scene.add mesh
+        return mesh
+
     addPoint: (opts) ->
         opts = defaults opts,
-            loc  : [0,0,0]
-            size : 5
-            texture: required
-            in_frame: true
+            loc         : [0,0,0]
+            size        : 5
+            texture     : required
+            in_frame    : true
 
         if not @_points?
             @_points = []
@@ -621,14 +645,13 @@ class Math3dThreeJS
             material.color.setRGB opts.color...
         else
             material = new THREE.MeshPhongMaterial
-                wireframe   : false
                 transparent : opts.texture.opacity < 1
                 side        : THREE.DoubleSide
 
-            material.color.setRGB    opts.texture.color...
-            material.ambient.setRGB  opts.texture.ambient...
-            material.specular.setRGB opts.texture.specular...
-            material.opacity = opts.texture.opacity
+            material.color.setRGB       opts.texture.color...
+            material.ambient.setRGB     opts.texture.ambient...
+            material.specular.setRGB    opts.texture.specular...
+            material.opacity          = opts.texture.opacity
 
         mesh = new THREE.Mesh geometry, material
         mesh.position.set 0, 0, 0
@@ -663,6 +686,8 @@ class Math3dThreeJS
                 return @addLine opts
             when 'point'
                 return @addPoint opts
+            when 'sphere'
+                return @addSphere opts
             else
                 console.log "ERROR: bad object type #{opts.obj.type}"
 
