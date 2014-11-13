@@ -373,11 +373,12 @@ class Math3dThreeJS
                 @controls.autoRotateSpeed = @opts.spin
             @controls.autoRotate = true
 
+        up = new THREE.Vector3()
         @controls.addEventListener 'change', =>
             if @renderer_type is 'dynamic'
-                @rescale_objects()
+                @rescaleObjects()
                 if @_text?
-                    up = (new THREE.Vector3 0, 1, 0).applyQuaternion @camera.quaternion
+                    up.set(0, 1, 0).applyQuaternion @camera.quaternion
                     for mesh in @_text
                         mesh.up = up.clone()
                         mesh.lookAt @camera.position
