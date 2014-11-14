@@ -220,8 +220,9 @@ class Math3dThreeJS
 
             # setup aspect ratio stuff
             aspectRatio = @aspectRatio = new THREE.Vector3 @opts.aspect_ratio...
+            @scaleSize = @aspectRatio.length()
             @squareScale = (new THREE.Vector3 1, 1, 1).normalize()
-            @squareScale.multiplyScalar @aspectRatio.length()
+            @squareScale.multiplyScalar @scaleSize
             @rescale = (vector) -> vector.multiply aspectRatio
 
             # setup color stuff
@@ -572,8 +573,8 @@ class Math3dThreeJS
                     size            : opts.size*2
                     sizeAttenuation : false
                 material.color.setRGB opts.texture.color...
-                cloud = (@_cloud[key] = new THREE.PointCloud(
-                                            new THREE.Geometry(), material))
+                cloud = @_cloud[key] = new THREE.PointCloud(
+                                            new THREE.Geometry(), material)
                 cloud.scale.copy @aspectRatio
                 @scene.add cloud
 
@@ -744,7 +745,7 @@ class Math3dThreeJS
                 offset = maxDim*0.05
                 offsets = (new THREE.Vector3 offset, offset, offset).divide @aspectRatio
 
-                textSize = minDim/@squareScale.length()/6
+                textSize = minDim/@scaleSize/8
 
                 if textSize is 0
                     return
@@ -780,11 +781,10 @@ class Math3dThreeJS
                                     opacity : 1
 
                     # add a bit of extra offset based on the size of the text
-                    # TODO: this is still not right for aspect ratio != identity
                     textBox = text.geometry.boundingBox.size().multiply @squareScale
-                    extraOffset = Math.max(textBox.x, textBox.y, textBox.z)*0.5
+                    extraOffset = Math.max(textBox.x, textBox.y, textBox.z)/2
 
-                    realOffset = offsets[offsetDir[1]] + extraOffset
+                    realOffset = offset + extraOffset
                     if offsetDir[0] is '+'
                         text.position[offsetDir[1]] += realOffset
                     else if offsetDir[0] is '-'
