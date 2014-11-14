@@ -268,17 +268,17 @@ class Math3dThreeJS
     finalize: ->
         @set_frame()
 
-        @_center = @rescale @boundingBox.geometry.boundingBox.center()
+        center = @rescale @boundingBox.geometry.boundingBox.center()
 
-        @camera.lookAt @_center
-        @controls.target = @_center
+        @camera.lookAt center
+        @controls.target = center
 
         dim = @rescale @boundingBox.geometry.boundingBox.size()
 
         maxDim = Math.max dim.x, dim.y, dim.z
 
         @camera.position.set 1.5, 1.5, 0.75
-        @camera.position.multiplyScalar(maxDim).add @_center
+        @camera.position.multiplyScalar(maxDim).add center
 
         @render_scene()
 
@@ -375,9 +375,9 @@ class Math3dThreeJS
         @controls.addEventListener 'change', =>
             if @renderer_type is 'dynamic'
 
-                if @_center? and @_points?
-                    scale = @camera.position.distanceTo @_center
+                if @_points?
                     for point in @_points
+                        scale = @camera.position.distanceTo point.position
                         point.scale.set scale, scale, scale
 
                 if @_text?
