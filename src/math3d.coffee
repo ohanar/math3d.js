@@ -212,7 +212,7 @@ class Math3dThreeJS
             if error
                 return @opts.callback? error
 
-            @attach_to_dom @opts.parent
+            @attachToDom @opts.parent
 
             if @_init
                 return @opts.callback? undefined, @
@@ -237,14 +237,16 @@ class Math3dThreeJS
             # initialize the scene
             @scene = new THREE.Scene()
 
+            # functions in change hooks will be run when the controls
+            # recieve a change event
+            @changeHooks = []
+
             # IMPORTANT: There is a major bug in three.js -- if you make the width below more than .5 of the window
             # width, then after 8 3d renders, things get foobared in WebGL mode.  This happens even with the simplest
             # demo using the basic cube example from their site with R68.  It even sometimes happens with this workaround, but
             # at least retrying a few times can fix it.
-            if not @opts.width?
-                @opts.width  = document.documentElement["clientWidth"]*.5
-
-            @opts.height = if @opts.height? then @opts.height else @opts.width*2/3
+            @opts.width ?= document.documentElement["clientWidth"]/2
+            @opts.height ?= @opts.width*2/3
 
             @setDynamicRenderer()
             @init_orbit_controls()
@@ -255,14 +257,14 @@ class Math3dThreeJS
 
             @opts.callback? undefined, @
 
-    attach_to_dom: (parent_element) ->
+    attachToDom: (parentElement) ->
         if @element?
             removeElement @element
         else
             @element = document.createElement 'span'
             @element.className = 'math-3d-viewer'
 
-        parent_element.appendChild @element
+        parentElement.appendChild @element
 
     # client code should call this when done adding objects to the scene
     finalize: ->
@@ -374,17 +376,8 @@ class Math3dThreeJS
         up = new THREE.Vector3()
         @controls.addEventListener 'change', =>
             if @renderer_type is 'dynamic'
-
-                if @_points?
-                    for point in @_points
-                        scale = @camera.position.distanceTo point.position
-                        point.scale.set scale, scale, scale
-
-                if @_text?
-                    up.set(0, 1, 0).applyQuaternion @camera.quaternion
-                    for mesh in @_text
-                        mesh.up = up.clone()
-                        mesh.lookAt @camera.position
+                for hook in @changeHooks
+                    hook()
 
                 @renderer.render @scene, @camera
 
@@ -451,13 +444,22 @@ class Math3dThreeJS
             texture     : required
             in_frame    : true
 
+        if not (opts.rotation? or @_text?)
+            @_text = []
+
+            up = new THREE.Vector3()
+            @changeHooks.push =>
+                up.set(0, 1, 0).applyQuaternion @camera.quaternion
+                for text in @_text
+                    text.up.copy up
+                    text.lookAt @camera.position
+
         opts.depth = 0
         text = @addText3d opts
+
         if not opts.rotation?
-            if @_text?
-                @_text.push text
-            else
-                @_text = [text]
+            @_text.push text
+
         return text
 
     addText3d: (opts) ->
@@ -483,7 +485,7 @@ class Math3dThreeJS
         material.color.setRGB opts.texture.color...
 
         text = new THREE.Mesh geometry, material
-        @rescale text.position.set(opts.loc...)
+        text.position.set opts.loc...
         text.rotation.set opts.rotation...
 
         geometry.computeBoundingBox()
@@ -503,6 +505,8 @@ class Math3dThreeJS
             @matrixWorldNeedsUpdate = true
 
         @_finalizeObj text, opts.in_frame
+
+        @rescale text.position
         text.scale.copy @squareScale
         return text
 
@@ -536,23 +540,75 @@ class Math3dThreeJS
         if opts._basic_material
             material = new THREE.MeshBasicMaterial
                 transparent : opts.texture.opacity < 1
-
-            material.color.setRGB       opts.texture.color...
-
         else
             material = new THREE.MeshPhongMaterial
                 transparent : opts.texture.opacity < 1
                 side        : THREE.DoubleSide
 
-            material.color.setRGB       opts.texture.color...
             material.ambient.setRGB     opts.texture.ambient...
             material.specular.setRGB    opts.texture.specular...
-            material.opacity          = opts.texture.opacity
+        material.color.setRGB       opts.texture.color...
+        material.opacity          = opts.texture.opacity
 
         sphere = new THREE.Mesh geometry, material
-        @rescale sphere.position.set(opts.loc...)
+        sphere.position.set opts.loc...
 
-        return @_finalizeObj sphere, opts.in_frame
+        @_finalizeObj sphere, opts.in_frame
+        @rescale sphere.position
+        return sphere
+
+    _addCloudPoint: (opts) ->
+        if not @_cloud
+            @_cloud = {}
+
+        key = opts.size+opts.texture.color+opts.in_frame
+
+        if not (cloud = @_cloud[key])?
+            material = new THREE.PointCloudMaterial
+                size            : opts.size*2
+                sizeAttenuation : false
+            material.color.setRGB opts.texture.color...
+            cloud = @_cloud[key] = new THREE.PointCloud(
+                                        new THREE.Geometry(), material)
+            cloud.scale.copy @aspectRatio
+            @scene.add cloud
+
+        cloud.geometry.vertices.push new THREE.Vector3(opts.loc...)
+
+        if opts.in_frame
+            @updateBoundingBox cloud
+        return cloud
+
+    _initPointHelper: ->
+        if not @_pointHelper?
+            @_pointHelperVec = new THREE.Vector3()
+
+            @_pointHelper = new THREE.Mesh()
+            @_pointHelper.geometry.vertices.push @_pointHelperVec
+
+    _addSpherePoint: (opts) ->
+        if not @_points?
+            @_points = []
+            @changeHooks.push =>
+                for point in @_points
+                    scale = @camera.position.distanceTo point.position
+                    point.scale.set scale, scale, scale
+
+        if opts.in_frame
+            @_initPointHelper()
+            @_pointHelperVec.set(opts.loc...)
+            @updateBoundingBox @_pointHelper
+
+        opts.radius = opts.size/1200
+        opts._basic_material = true
+        opts.in_frame = false
+
+        delete opts.size
+        delete opts.use_cloud
+
+        point = @addSphere opts
+        @_points.push point
+        return point
 
     addPoint: (opts) ->
         opts = defaults opts,
@@ -563,52 +619,9 @@ class Math3dThreeJS
             in_frame    : true
 
         if opts.use_cloud
-            if not @_cloud
-                @_cloud = {}
-
-            key = opts.size+opts.texture.color+opts.in_frame
-
-            if not (cloud = @_cloud[key])?
-                material = new THREE.PointCloudMaterial
-                    size            : opts.size*2
-                    sizeAttenuation : false
-                material.color.setRGB opts.texture.color...
-                cloud = @_cloud[key] = new THREE.PointCloud(
-                                            new THREE.Geometry(), material)
-                cloud.scale.copy @aspectRatio
-                @scene.add cloud
-
-            cloud.geometry.vertices.push new THREE.Vector3(opts.loc...)
-
-            if opts.in_frame
-                @updateBoundingBox cloud
-            return cloud
+            return @_addCloudPoint opts
         else
-            if not @_points?
-                @_points = []
-
-            in_frame = opts.in_frame
-            loc = opts.loc
-
-            opts.radius = opts.size/1200
-            opts._basic_material = true
-            opts.in_frame = false
-
-            delete opts.size
-            delete opts.use_cloud
-
-            point = @addSphere opts
-
-            @_points.push point
-
-            if in_frame
-                if not @_pointHelper?
-                    @_pointHelper = new THREE.Mesh()
-                    @_pointHelper.geometry.vertices.push new THREE.Vector3()
-
-                @_pointHelper.geometry.vertices[0].set loc...
-                @updateBoundingBox @_pointHelper
-            return point
+            return @_addSpherePoint opts
 
     addIndexFaceSet: (opts) ->
         opts = defaults opts,
