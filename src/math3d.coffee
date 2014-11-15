@@ -417,11 +417,20 @@ class Math3dThreeJS
 
     updateBoundingBox: (obj) ->
         obj.geometry.computeBoundingBox()
+
+        if @_boundingBoxHelper?
+            @_boundingBoxHelper.copy obj.geometry.boundingBox.clone()
+        else
+            @_boundingBoxHelper = obj.geometry.boundingBox.clone()
+
+        @_boundingBoxHelper.min.add obj.position
+        @_boundingBoxHelper.max.add obj.position
+
         if @boundingBox?
-            @boundingBox.geometry.boundingBox.union obj.geometry.boundingBox
+            @boundingBox.geometry.boundingBox.union @_boundingBoxHelper
         else
             @boundingBox = new THREE.BoxHelper()
-            @boundingBox.geometry.boundingBox = obj.geometry.boundingBox.clone()
+            @boundingBox.geometry.boundingBox = @_boundingBoxHelper.clone()
         @boundingBox.update @boundingBox
 
     _finalizeObj: (obj, in_frame) ->
@@ -430,8 +439,9 @@ class Math3dThreeJS
         if in_frame
             @updateBoundingBox obj
 
-        @scene.add obj
+        @rescale obj.position
 
+        @scene.add obj
         return obj
 
     addText: (opts) ->
@@ -442,7 +452,6 @@ class Math3dThreeJS
             rotation    : undefined # by default will always face the camera
             size        : 1         # should really be specified
             texture     : required
-            in_frame    : true
 
         if not (opts.rotation? or @_text?)
             @_text = []
@@ -471,7 +480,6 @@ class Math3dThreeJS
             size        : 1         # should really be specified
             depth       : 1         # ditto
             texture     : required
-            in_frame    : true
 
         geometry = new THREE.TextGeometry opts.text,
             size        : opts.size
@@ -504,9 +512,8 @@ class Math3dThreeJS
 
             @matrixWorldNeedsUpdate = true
 
-        @_finalizeObj text, opts.in_frame
+        @_finalizeObj text, false
 
-        @rescale text.position
         text.scale.copy @squareScale
         return text
 
@@ -554,7 +561,6 @@ class Math3dThreeJS
         sphere.position.set opts.loc...
 
         @_finalizeObj sphere, opts.in_frame
-        @rescale sphere.position
         return sphere
 
     _addCloudPoint: (opts) ->
@@ -674,7 +680,6 @@ class Math3dThreeJS
             material.opacity          = opts.texture.opacity
 
         mesh = new THREE.Mesh geometry, material
-        mesh.position.set 0, 0, 0
 
         return @_finalizeObj mesh, opts.in_frame
 
