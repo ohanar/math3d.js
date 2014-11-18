@@ -257,6 +257,19 @@ class Math3dThreeJS
 
             @opts.callback? undefined, @
 
+    # client code should call this when done adding objects to the scene
+    finalize: ->
+        @computeDimensions()
+
+        @setFrame()
+        @updateCamera()
+
+        @render_scene()
+
+        # possibly show the canvas warning.
+        if @opts.renderer is 'canvas'
+            @element.title = 'WARNING: using slow non-WebGL canvas renderer'
+
     attachToDom: (parentElement) ->
         if @element?
             removeElement @element
@@ -265,28 +278,6 @@ class Math3dThreeJS
             @element.className = 'math-3d-viewer'
 
         parentElement.appendChild @element
-
-    # client code should call this when done adding objects to the scene
-    finalize: ->
-        @set_frame()
-
-        center = @rescale @boundingBox.geometry.boundingBox.center()
-
-        @camera.lookAt center
-        @controls.target = center
-
-        dim = @rescale @boundingBox.geometry.boundingBox.size()
-
-        maxDim = Math.max dim.x, dim.y, dim.z
-
-        @camera.position.set 1.5, 1.5, 0.75
-        @camera.position.multiplyScalar(maxDim).add center
-
-        @render_scene()
-
-        # possibly show the canvas warning.
-        if @opts.renderer is 'canvas'
-            @element.title = 'WARNING: using slow non-WebGL canvas renderer'
 
     setDynamicRenderer: ->
         if @renderer_type is 'dynamic'
@@ -390,10 +381,8 @@ class Math3dThreeJS
 
         view_angle = 45
         aspect     = @opts.width/@opts.height
-        near       = 0.1
-        far        = Math.max 20000, opts.distance*2
 
-        @camera    = new THREE.PerspectiveCamera view_angle, aspect, near, far
+        @camera    = new THREE.PerspectiveCamera view_angle, aspect
         @scene.add @camera
         @camera.position.set opts.distance, opts.distance, opts.distance
         @camera.lookAt @scene.position
@@ -703,10 +692,16 @@ class Math3dThreeJS
             else
                 console.log "ERROR: bad object type #{opts.obj.type}"
 
+    computeDimensions: ->
+        dim = @rescale @boundingBox.geometry.boundingBox.size()
+
+        @maxDim = Math.max dim.x, dim.y, dim.z
+        @minDim = Math.min dim.x, dim.y, dim.z
+
     # always call this after adding things to the scene to make sure track
-    # controls are sorted out, etc.   Set draw:false, if you don't want to
-    # actually *see* a frame.
-    set_frame: ->
+    # controls are sorted out, etc. The client should never have to worry
+    # about calling this
+    setFrame: ->
         ###
         if Math.abs(x1 - x0) < eps
             x1 += 1
@@ -747,15 +742,10 @@ class Math3dThreeJS
                 max = @boundingBox.geometry.boundingBox.max
                 avg = @boundingBox.geometry.boundingBox.center()
 
-                dim = @rescale @boundingBox.geometry.boundingBox.size()
-
-                maxDim = Math.max dim.x, dim.y, dim.z
-                minDim = Math.min dim.x, dim.y, dim.z
-
-                offset = maxDim*0.05
+                offset = @maxDim*0.05
                 offsets = (new THREE.Vector3 offset, offset, offset).divide @aspectRatio
 
-                textSize = minDim/@scaleSize/8
+                textSize = @minDim/@scaleSize/8
 
                 if textSize is 0
                     return
@@ -816,6 +806,19 @@ class Math3dThreeJS
                 addLabel [max.x, max.y, min.z], format(max.x)
                 addLabel [avg.x, max.y, min.z], "x = #{format avg.x}"
                 addLabel [min.x, max.y, min.z], format(min.x)
+
+    updateCamera: ->
+        center = @rescale @boundingBox.geometry.boundingBox.center()
+
+        @camera.lookAt center
+        @controls.target = center
+
+        @camera.position.set 1.5, 1.5, 0.75
+        @camera.position.multiplyScalar(@maxDim).add center
+
+        @camera.far = @maxDim*16
+        @camera.near = @minDim/4
+        @camera.updateProjectionMatrix()
 
     animate: (opts = {}) ->
         opts = defaults opts,
