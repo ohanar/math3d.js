@@ -111,7 +111,7 @@ math3d.threejsSource = "//cdnjs.cloudflare.com/ajax/libs/three.js/r68/three.min.
 math3d.fontSources = []
 
 math3d.loadThreejs = (callback) ->
-    if THREE? and _orbitControlsSetup and not math3d.fontsSources.length
+    if THREE? and _orbitControlsSetup and not math3d.fontSources.length
         return callback()
 
     _loadingThreejsCallbacks.push callback
@@ -734,6 +734,10 @@ class Math3dThreeJS
         if @frameOpts.thickness isnt 0 and not @_bounded
             @_bounded = true
 
+            if not @boundingBox?
+                # no objects in the scene
+                return
+
             # set the color and linewidth of the bounding box
             @boundingBox.material.color = @frameColor
             @boundingBox.material.linewidth = @frameOpts.thickness
@@ -793,7 +797,6 @@ class Math3dThreeJS
                             loc         : loc
                             text        : text
                             size        : textSize
-                            in_frame    : false
                             texture     :
                                     color   : frameColor
                                     opacity : 1
