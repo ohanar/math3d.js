@@ -650,34 +650,22 @@ class Math3dThreeJS
                 b = c
 
         geometry.mergeVertices()
-        #geometry.computeCentroids()
         geometry.computeFaceNormals()
-        #geometry.computeVertexNormals()
-        geometry.computeBoundingSphere()
 
-        if @opts.wireframe or opts.wireframe
-            if typeof opts.wireframe is 'number'
-                line_width = opts.wireframe
-            else if typeof @opts.wireframe is 'number'
-                line_width = @opts.wireframe
-            else
-                line_width = 1
-
+        if opts.wireframe
             material = new THREE.MeshBasicMaterial
-                wireframe          : true
-                wireframeLinewidth : line_width
-                side               : THREE.DoubleSide
-
-            material.color.setRGB opts.color...
+                wireframe           : true
+                wireframeLinewidth  : opts.wireframe
+                transparent         : opts.texture.opacity < 1
+                side                : THREE.DoubleSide
         else
             material = new THREE.MeshPhongMaterial
-                transparent : opts.texture.opacity < 1
-                side        : THREE.DoubleSide
-
-            material.color.setRGB       opts.texture.color...
+                transparent         : opts.texture.opacity < 1
+                side                : THREE.DoubleSide
             material.ambient.setRGB     opts.texture.ambient...
             material.specular.setRGB    opts.texture.specular...
-            material.opacity          = opts.texture.opacity
+        material.color.setRGB       opts.texture.color...
+        material.opacity          = opts.texture.opacity
 
         mesh = new THREE.Mesh geometry, material
 
