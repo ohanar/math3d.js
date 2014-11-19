@@ -197,7 +197,6 @@ class Math3dThreeJS
             renderer        : undefined # 'webgl' or 'canvas' or undefined to choose best
             background      : [1,1,1]
             spin            : false     # if true, image spins by itself when mouse is over it.
-            camera_distance : 10
             aspect_ratio    : [1, 1, 1] # a triple [x,y,z] of length three, which scales the x,y,z coordinates of everything by the given values.
             stop_when_gone  : undefined # if given, animation, etc., stops when this html element (not jquery!) is no longer in the DOM
             frame           : undefined # frame options
@@ -249,7 +248,6 @@ class Math3dThreeJS
             @opts.height ?= @opts.width*2/3
 
             @setDynamicRenderer()
-            @init_orbit_controls()
             @init_on_mouseover()
 
             # add a bunch of lights
@@ -262,7 +260,10 @@ class Math3dThreeJS
         @computeDimensions()
 
         @setFrame()
-        @updateCamera()
+        @setCamera()
+        @setOrbitControls()
+
+        @runChangeHooks()
 
         @render_scene()
 
@@ -347,46 +348,6 @@ class Math3dThreeJS
             type    : 'png'      # 'png' or 'jpeg' or 'webp' (the best)
             quality : undefined   # 1 is best quality; 0 is worst; only applies for jpeg or webp
         @renderer.domElement.toDataURL "image/#{opts.type}", opts.quality
-
-    init_orbit_controls: ->
-        if not @camera?
-            @add_camera distance: @opts.camera_distance
-
-        # set up camera controls
-        @controls = new OrbitControls @camera, @renderer.domElement
-        @controls.damping = 2
-        @controls.noKeys = true
-        @controls.zoomSpeed = 0.4
-        if @opts.spin
-            if typeof @opts.spin is "boolean"
-                @controls.autoRotateSpeed = 2.0
-            else
-                @controls.autoRotateSpeed = @opts.spin
-            @controls.autoRotate = true
-
-        up = new THREE.Vector3()
-        @controls.addEventListener 'change', =>
-            if @renderer_type is 'dynamic'
-                for hook in @changeHooks
-                    hook()
-
-                @renderer.render @scene, @camera
-
-    add_camera: (opts) ->
-        opts = defaults opts,
-            distance : 10
-
-        if @camera?
-            return
-
-        view_angle = 45
-        aspect     = @opts.width/@opts.height
-
-        @camera    = new THREE.PerspectiveCamera view_angle, aspect
-        @scene.add @camera
-        @camera.position.set opts.distance, opts.distance, opts.distance
-        @camera.lookAt @scene.position
-        @camera.up = new THREE.Vector3 0, 0, 1
 
     init_light: (color= 0xffffff) ->
         ambient = new THREE.AmbientLight(0x404040)
@@ -698,6 +659,8 @@ class Math3dThreeJS
         @maxDim = Math.max dim.x, dim.y, dim.z
         @minDim = Math.min dim.x, dim.y, dim.z
 
+        @center = @rescale @boundingBox.geometry.boundingBox.center()
+
     # always call this after adding things to the scene to make sure track
     # controls are sorted out, etc. The client should never have to worry
     # about calling this
@@ -807,18 +770,49 @@ class Math3dThreeJS
                 addLabel [avg.x, max.y, min.z], "x = #{format avg.x}"
                 addLabel [min.x, max.y, min.z], format(min.x)
 
-    updateCamera: ->
-        center = @rescale @boundingBox.geometry.boundingBox.center()
+    setCamera: ->
+        view_angle = 45
+        aspect     = @opts.width/@opts.height
+        near = @minDim/4
+        far = @maxDim*16
 
-        @camera.lookAt center
-        @controls.target = center
+        @camera    = new THREE.PerspectiveCamera view_angle, aspect, near, far
+        @camera.up = new THREE.Vector3 0, 0, 1
+
+        @camera.lookAt @center
 
         @camera.position.set 1.5, 1.5, 0.75
-        @camera.position.multiplyScalar(@maxDim).add center
+        @camera.position.multiplyScalar(@maxDim).add @center
 
-        @camera.far = @maxDim*16
-        @camera.near = @minDim/4
         @camera.updateProjectionMatrix()
+
+        @scene.add @camera
+
+    runChangeHooks: ->
+        if @renderer_type is 'dynamic'
+            for hook in @changeHooks
+                hook()
+
+            @renderer.render @scene, @camera
+
+    setOrbitControls: ->
+        # set up camera controls
+        @controls = new OrbitControls @camera, @renderer.domElement
+
+        @controls.target = @center
+
+        @controls.damping = 2
+        @controls.noKeys = true
+        #@controls.zoomSpeed = 0.6
+
+        if @opts.spin
+            if typeof @opts.spin is "boolean"
+                @controls.autoRotateSpeed = 2.0
+            else
+                @controls.autoRotateSpeed = @opts.spin
+            @controls.autoRotate = true
+
+        @controls.addEventListener 'change', => @runChangeHooks()
 
     animate: (opts = {}) ->
         opts = defaults opts,
