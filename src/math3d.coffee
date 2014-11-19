@@ -247,6 +247,7 @@ class Math3dThreeJS
             @opts.width ?= document.documentElement["clientWidth"]/2
             @opts.height ?= @opts.width*2/3
 
+            @opts.renderer ?= _defaultRendererType
             @setDynamicRenderer()
             @init_on_mouseover()
 
@@ -281,13 +282,12 @@ class Math3dThreeJS
         parentElement.appendChild @element
 
     setDynamicRenderer: ->
-        if @renderer_type is 'dynamic'
+        if @rendererType is 'dynamic'
             # already have it
             return
 
-        @opts.renderer ?= _defaultRendererType
         @renderer = getRenderer @, @opts.renderer
-        @renderer_type = 'dynamic'
+        @rendererType = 'dynamic'
 
         # remove the current renderer (if it exists)
         removeElement @element.lastChild
@@ -297,39 +297,35 @@ class Math3dThreeJS
 
         @renderer.setClearColor @background, 1
         @renderer.setSize @opts.width, @opts.height
-        if @controls?
-            @controls.enabled = true
-            if @last_canvas_pos?
-                @controls.object.position.copy @last_canvas_pos
-            if @last_canvas_target?
-                @controls.target.copy @last_canvas_target
+
+        @controls?.enable = true
+
         if @opts.spin
             @animate render: false
+
         @render_scene true
 
     setStaticRenderer: ->
-        if @renderer_type is 'static'
+        if @rendererType is 'static'
             # already have it
             return
 
-        if not @static_image?
-            @static_image = document.createElement 'img'
-            @static_image.className = 'math-3d-static-renderer'
-            @static_image.style.width = @opts.width
-            @static_image.style.height = @opts.height
-        @static_image.src = @data_url()
+        @controls?.enable = false
 
-        @renderer_type = 'static'
-        if @controls?
-            @controls.enabled = false
-            @last_canvas_pos = @controls.object.position
-            @last_canvas_target = @controls.target
+        if not @staticImage?
+            @staticImage = document.createElement 'img'
+            @staticImage.className = 'math-3d-static-renderer'
+            @staticImage.style.width = @opts.width
+            @staticImage.style.height = @opts.height
+        @staticImage.src = @dataUrl()
+
+        @rendererType = 'static'
 
         # remove the current renderer (if it exists)
         removeElement @element.lastChild
 
         # place renderer in correct place in the DOM
-        @element.appendChild @static_image
+        @element.appendChild @staticImage
 
     # On mouseover, we switch the renderer out to use webgl, if available, and also enable spin animation.
     init_on_mouseover: ->
@@ -343,7 +339,7 @@ class Math3dThreeJS
         @element.onclick = =>
             @setDynamicRenderer()
 
-    data_url: (opts) ->
+    dataUrl: (opts) ->
         opts = defaults opts,
             type    : 'png'      # 'png' or 'jpeg' or 'webp' (the best)
             quality : undefined   # 1 is best quality; 0 is worst; only applies for jpeg or webp
@@ -789,7 +785,7 @@ class Math3dThreeJS
         @scene.add @camera
 
     runChangeHooks: ->
-        if @renderer_type is 'dynamic'
+        if @rendererType is 'dynamic'
             for hook in @changeHooks
                 hook()
 
@@ -826,7 +822,7 @@ class Math3dThreeJS
         @_animate opts
 
     _animate: (opts) ->
-        if @renderer_type is 'static'
+        if @rendererType is 'static'
             # will try again when we switch to dynamic renderer
             @_animate_started = false
             return
@@ -858,7 +854,7 @@ class Math3dThreeJS
             f()
 
     render_scene: (force = false) ->
-        if @renderer_type isnt 'dynamic'
+        if @rendererType isnt 'dynamic'
             # if we don't have the renderer, swap it in, make a static image,
             # then give it back to whoever had it.
             owner = _sceneUsingRenderer
