@@ -211,11 +211,18 @@ class Math3dThreeJS
             if error
                 return @opts.callback? error
 
-            @attachToDom @opts.parent
-
             if @_init
                 return @opts.callback? undefined, @
             @_init = true
+
+            # IMPORTANT: There is a major bug in three.js -- if you make the width below more than .5 of the window
+            # width, then after 8 3d renders, things get foobared in WebGL mode.  This happens even with the simplest
+            # demo using the basic cube example from their site with R68.  It even sometimes happens with this workaround, but
+            # at least retrying a few times can fix it.
+            @opts.width ?= document.documentElement.clientWidth/2
+            @opts.height ?= @opts.width*2/3
+
+            @attachToDom @opts.parent
 
             # setup aspect ratio stuff
             aspectRatio = @aspectRatio = new THREE.Vector3 @opts.aspect_ratio...
@@ -238,21 +245,9 @@ class Math3dThreeJS
 
             # functions in change hooks will be run when the controls
             # recieve a change event
-            @changeHooks = []
+            @renderHooks = []
 
-            # IMPORTANT: There is a major bug in three.js -- if you make the width below more than .5 of the window
-            # width, then after 8 3d renders, things get foobared in WebGL mode.  This happens even with the simplest
-            # demo using the basic cube example from their site with R68.  It even sometimes happens with this workaround, but
-            # at least retrying a few times can fix it.
-            @opts.width ?= document.documentElement["clientWidth"]/2
-            @opts.height ?= @opts.width*2/3
-
-            @opts.renderer ?= _defaultRendererType
-            @setDynamicRenderer()
             @init_on_mouseover()
-
-            # add a bunch of lights
-            @init_light()
 
             @opts.callback? undefined, @
 
@@ -263,10 +258,22 @@ class Math3dThreeJS
         @setFrame()
         @setCamera()
         @setOrbitControls()
+        @setLight()
 
-        @runChangeHooks()
+        # borrow the renderer to do the initial render
+        owner = _sceneUsingRenderer
+        wasDynamic = false
+        if owner? and owner.rendererType is 'dynamic'
+            wasDynamic = true
 
-        @render_scene()
+        @opts.renderer ?= _defaultRendererType
+        @setDynamicRenderer() # used to do the first render
+
+        @setStaticRenderer()
+
+        # then give it back to whoever had it (if they were using it)
+        if wasDynamic
+            owner.setDynamicRenderer()
 
         # possibly show the canvas warning.
         if @opts.renderer is 'canvas'
@@ -278,6 +285,7 @@ class Math3dThreeJS
         else
             @element = document.createElement 'span'
             @element.className = 'math-3d-viewer'
+            @element.style.display = 'inline-block'
 
         parentElement.appendChild @element
 
@@ -289,28 +297,28 @@ class Math3dThreeJS
         @renderer = getRenderer @, @opts.renderer
         @rendererType = 'dynamic'
 
+        @renderer.setClearColor @background, 1
+        @renderer.setSize @opts.width, @opts.height
+
+        @controls.enabled = true
+
+        if @opts.spin
+            @animate render: false
+
+        @renderScene true
+
         # remove the current renderer (if it exists)
         removeElement @element.lastChild
 
         # place renderer in correct place in the DOM
         @element.appendChild @renderer.domElement
 
-        @renderer.setClearColor @background, 1
-        @renderer.setSize @opts.width, @opts.height
-
-        @controls?.enable = true
-
-        if @opts.spin
-            @animate render: false
-
-        @render_scene true
-
     setStaticRenderer: ->
         if @rendererType is 'static'
             # already have it
             return
 
-        @controls?.enable = false
+        @controls.enabled = false
 
         if not @staticImage?
             @staticImage = document.createElement 'img'
@@ -344,22 +352,6 @@ class Math3dThreeJS
             type    : 'png'      # 'png' or 'jpeg' or 'webp' (the best)
             quality : undefined   # 1 is best quality; 0 is worst; only applies for jpeg or webp
         @renderer.domElement.toDataURL "image/#{opts.type}", opts.quality
-
-    init_light: (color= 0xffffff) ->
-        ambient = new THREE.AmbientLight(0x404040)
-        @scene.add ambient
-
-        color = 0xffffff
-        d     = 10000000
-        intensity = 0.5
-
-        for p in [[d,d,d], [d,d,-d], [d,-d,d], [d,-d,-d],[-d,d,d], [-d,d,-d], [-d,-d,d], [-d,-d,-d]]
-            directionalLight = new THREE.DirectionalLight color, intensity
-            directionalLight.position.set(p...).normalize()
-            @scene.add directionalLight
-
-        @light = new THREE.PointLight color
-        @light.position.set 0, d, 0
 
     updateBoundingBox: (obj) ->
         obj.geometry.computeBoundingBox()
@@ -403,7 +395,7 @@ class Math3dThreeJS
             @_text = []
 
             up = new THREE.Vector3()
-            @changeHooks.push =>
+            @renderHooks.push =>
                 up.set(0, 1, 0).applyQuaternion @camera.quaternion
                 for text in @_text
                     text.up.copy up
@@ -541,7 +533,7 @@ class Math3dThreeJS
     _addSpherePoint: (opts) ->
         if not @_points?
             @_points = []
-            @changeHooks.push =>
+            @renderHooks.push =>
                 for point in @_points
                     scale = @camera.position.distanceTo point.position
                     point.scale.set scale, scale, scale
@@ -766,6 +758,20 @@ class Math3dThreeJS
                 addLabel [avg.x, max.y, min.z], "x = #{format avg.x}"
                 addLabel [min.x, max.y, min.z], format(min.x)
 
+    setLight: (opts) ->
+        opts = defaults opts,
+            color: 0xffffff
+            intensity: 0.5
+
+        ambient = new THREE.AmbientLight opts.color
+        @scene.add ambient
+
+        for coord in ['x', 'y', 'z']
+            for sign in [1, -1]
+                directionalLight = new THREE.DirectionalLight opts.color, opts.intensity
+                directionalLight.position.set(0,0,0)[coord] = sign
+                @scene.add directionalLight
+
     setCamera: ->
         view_angle = 45
         aspect     = @opts.width/@opts.height
@@ -784,16 +790,9 @@ class Math3dThreeJS
 
         @scene.add @camera
 
-    runChangeHooks: ->
-        if @rendererType is 'dynamic'
-            for hook in @changeHooks
-                hook()
-
-            @renderer.render @scene, @camera
-
     setOrbitControls: ->
         # set up camera controls
-        @controls = new OrbitControls @camera, @renderer.domElement
+        @controls = new OrbitControls @camera, @element
 
         @controls.target = @center
 
@@ -808,7 +807,7 @@ class Math3dThreeJS
                 @controls.autoRotateSpeed = @opts.spin
             @controls.autoRotate = true
 
-        @controls.addEventListener 'change', => @runChangeHooks()
+        @controls.addEventListener 'change', => @renderScene true
 
     animate: (opts = {}) ->
         opts = defaults opts,
@@ -828,9 +827,9 @@ class Math3dThreeJS
             return
 
         if @element.offsetWidth <= 0 and @element.offsetWidth <= 0
-            if @opts.stop_when_gone? and not contains document, @opts.stop_when_gone
+            if @opts.stop_when_gone? and not document.contains(@opts.stop_when_gone)
                 @_animate_started = false
-            else if not contains document, @element
+            else if not document.contains(@element)
                 setTimeout (=> @_animate opts), 5000
             else
                 setTimeout (=> @_animate opts), 1000
@@ -844,7 +843,7 @@ class Math3dThreeJS
             @_stop_animating = false
             @_animate_started = false
             return
-        @render_scene opts.render
+        @renderScene opts.render
         delete opts.render
         f = =>
             requestAnimationFrame (=> @_animate opts)
@@ -853,35 +852,37 @@ class Math3dThreeJS
         else
             f()
 
-    render_scene: (force = false) ->
+    renderScene: (force = false) ->
+        if @_rendering? and @_rendering
+            # already in the process of rendering
+            return
+
         if @rendererType isnt 'dynamic'
-            # if we don't have the renderer, swap it in, make a static image,
-            # then give it back to whoever had it.
-            owner = _sceneUsingRenderer
-            @setDynamicRenderer()
-            @setStaticRenderer()
-            owner?.setDynamicRenderer()
+            # scene's are only rendered when they are dynamic
             return
 
         if not @camera?
             return # nothing to do yet
 
-        @controls?.update()
+        @_rendering = true
 
-        pos = @camera.position
-        if not @_last_pos?
-            new_pos = true
-            @_last_pos = pos.clone()
-        else if @_last_pos.distanceToSquared(pos) > .05
-            new_pos = true
-            @_last_pos.copy pos
-        else
-            new_pos = false
+        if not force
+            position = @camera.position
+            if not @_lastPosition?
+                force = true
+                @_lastPosition = position.clone()
+                #@_renderDistance = @minDim*@minDim/10000
+            else if @_lastPosition.distanceToSquared(position) > 0.05
+                force = true
+                @_lastPosition.copy position
 
-        if not new_pos and not force
-            return
+        if force
+            @controls.update()
+            for hook in @renderHooks
+                hook()
+            @renderer.render @scene, @camera
 
-        @renderer.render @scene, @camera
+        @_rendering = false
 
 math3d.render_3d_scene = (opts) ->
     opts = defaults opts,
