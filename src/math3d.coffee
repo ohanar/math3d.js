@@ -262,9 +262,7 @@ class Math3dThreeJS
 
         # borrow the renderer to do the initial render
         owner = _sceneUsingRenderer
-        wasDynamic = false
-        if owner? and owner.rendererType is 'dynamic'
-            wasDynamic = true
+        wasDynamic = owner? and owner.rendererType is 'dynamic'
 
         @opts.renderer ?= _defaultRendererType
         @setDynamicRenderer() # used to do the first render
