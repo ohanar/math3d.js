@@ -426,8 +426,6 @@ var OrbitControls = function ( object, domElement ) {
 
 	function onMouseUp( /* event */ ) {
 
-		if ( scope.enabled === false ) return;
-
 		document.removeEventListener( 'mousemove', onMouseMove, false );
 		document.removeEventListener( 'mouseup', onMouseUp, false );
 		scope.dispatchEvent( endEvent );

@@ -1,4 +1,4 @@
-diff --git a/OrbitControls.js.bak b/OrbitControls.js
+diff --git a/OrbitControls.js b/OrbitControls.js
 --- a/OrbitControls.js
 +++ b/OrbitControls.js
 @@ -21,7 +21,7 @@
@@ -45,7 +45,16 @@ diff --git a/OrbitControls.js.bak b/OrbitControls.js
  			if ( scope.noPan === true ) return;
  
  			state = STATE.PAN;
-@@ -643,5 +649,3 @@ THREE.OrbitControls = function ( object, domElement ) {
+@@ -420,8 +426,6 @@ THREE.OrbitControls = function ( object, domElement ) {
+
+ 	function onMouseUp( /* event */ ) {
+
+-		if ( scope.enabled === false ) return;
+-
+ 		document.removeEventListener( 'mousemove', onMouseMove, false );
+ 		document.removeEventListener( 'mouseup', onMouseUp, false );
+ 		scope.dispatchEvent( endEvent );
+@@ -643,5 +647,3 @@ THREE.OrbitControls = function ( object, domElement ) {
  	this.update();
  
  };
