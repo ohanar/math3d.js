@@ -247,8 +247,6 @@ class Math3dThreeJS
             # recieve a change event
             @renderHooks = []
 
-            @init_on_mouseover()
-
             @opts.callback? undefined, @
 
     # client code should call this when done adding objects to the scene
@@ -272,6 +270,8 @@ class Math3dThreeJS
         # then give it back to whoever had it (if they were using it)
         if wasDynamic
             owner.setDynamicRenderer()
+
+        @setOnMouseOver()
 
         # possibly show the canvas warning.
         if @opts.renderer is 'canvas'
@@ -332,18 +332,6 @@ class Math3dThreeJS
 
         # place renderer in correct place in the DOM
         @element.appendChild @staticImage
-
-    # On mouseover, we switch the renderer out to use webgl, if available, and also enable spin animation.
-    init_on_mouseover: ->
-
-        @element.onmouseenter = =>
-            @setDynamicRenderer()
-
-        @element.onmouseleave = =>
-            @setStaticRenderer()
-
-        @element.onclick = =>
-            @setDynamicRenderer()
 
     dataUrl: (opts) ->
         opts = defaults opts,
@@ -806,6 +794,13 @@ class Math3dThreeJS
             @controls.autoRotate = true
 
         @controls.addEventListener 'change', => @renderScene true
+
+    # on mouseover, we switch the renderer out to use the dynamic renderer
+    setOnMouseOver: ->
+
+        @element.addEventListener 'mouseover', (=> @setDynamicRenderer()), false
+
+        @element.addEventListener 'mouseleave', (=> @setStaticRenderer()), false
 
     animate: (opts = {}) ->
         opts = defaults opts,
