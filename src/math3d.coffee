@@ -195,12 +195,12 @@ class Math3dThreeJS
             width           : undefined
             height          : undefined
             renderer        : undefined # 'webgl' or 'canvas' or undefined to choose best
-            background      : [1,1,1]
+            background      : [1,1, 1]
             spin            : false     # if true, image spins by itself when mouse is over it.
             aspect_ratio    : [1, 1, 1] # a triple [x,y,z] of length three, which scales the x,y,z coordinates of everything by the given values.
             stop_when_gone  : undefined # if given, animation, etc., stops when this html element (not jquery!) is no longer in the DOM
             frame           : undefined # frame options
-            callback        : undefined # opts.callback(error, this object)
+            callback        : undefined # opts.callback(this object, error)
 
         @frameOpts = defaults @opts.frame,
             color           : undefined # defaults to the color-wise negation of the background
@@ -209,10 +209,10 @@ class Math3dThreeJS
 
         math3d.loadThreejs (error) =>
             if error
-                return @opts.callback? error
+                return @opts.callback? undefined, error
 
             if @_init
-                return @opts.callback? undefined, @
+                return @opts.callback? @
             @_init = true
 
             # IMPORTANT: There is a major bug in three.js -- if you make the width below more than .5 of the window
@@ -247,7 +247,7 @@ class Math3dThreeJS
             # recieve a change event
             @renderHooks = []
 
-            @opts.callback? undefined, @
+            @opts.callback? @
 
     # client code should call this when done adding objects to the scene
     finalize: ->
@@ -526,7 +526,7 @@ class Math3dThreeJS
 
         if opts.in_frame
             @_initPointHelper()
-            @_pointHelperVec.set(opts.loc...)
+            @_pointHelperVec.set opts.loc...
             @updateBoundingBox @_pointHelper
 
         opts.radius = opts.size/1200
@@ -882,7 +882,7 @@ math3d.render_3d_scene = (opts) ->
         scene    : required    # {opts:?, obj:?} or url from which to download (via ajax) a JSON string that parses to {opts:?,obj:?}
         element  : required    # DOM element to attach to
         timeout  : 30000       # milleseconds for timing out fetchs
-        callback : undefined   # callback(error, scene object)
+        callback : undefined   # callback(scene object, error)
     # Render a 3-d scene
 
     create_scene = (scene) ->
@@ -890,12 +890,12 @@ math3d.render_3d_scene = (opts) ->
 
         scene.opts.parent = opts.element
 
-        scene.opts.callback = (error, sceneobj) ->
+        scene.opts.callback = (sceneobj, error) ->
             if not error
                 if scene.obj?
                     sceneobj.addObj scene.obj
                 sceneobj.finalize()
-            opts.callback? error, sceneobj
+            opts.callback? sceneobj, error
 
         new Math3dThreeJS scene.opts
 
