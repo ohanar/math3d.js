@@ -200,12 +200,17 @@ class Math3dThreeJS
             aspect_ratio    : [1, 1, 1] # a triple [x,y,z] of length three, which scales the x,y,z coordinates of everything by the given values.
             stop_when_gone  : undefined # if given, animation, etc., stops when this html element (not jquery!) is no longer in the DOM
             frame           : undefined # frame options
+            light           : undefined # light options
             callback        : undefined # opts.callback(this object, error)
 
         @frameOpts = defaults @opts.frame,
             color           : undefined # defaults to the color-wise negation of the background
             thickness       : .4        # zero thickness disables the frame
             labels          : true      # whether or not to enable labels on the axes
+
+        @lightOpts = defaults @opts.light,
+            color           : [1, 1, 1]
+            intensity       : 0.75
 
         math3d.loadThreejs (error) =>
             if error
@@ -744,19 +749,17 @@ class Math3dThreeJS
                 addLabel [avg.x, max.y, min.z], "x = #{format avg.x}"
                 addLabel [min.x, max.y, min.z], format(min.x)
 
-    setLight: (opts) ->
-        opts = defaults opts,
-            color: 0xffffff
-            intensity: 0.5
+    setLight: ->
+        ambientLight = new THREE.AmbientLight()
+        ambientLight.color.setRGB @lightOpts.color...
+        @scene.add ambientLight
 
-        ambient = new THREE.AmbientLight opts.color
-        @scene.add ambient
+        cameraLight = new THREE.PointLight 0, @lightOpts.intensity
+        cameraLight.color.setRGB @lightOpts.color...
+        @scene.add cameraLight
 
-        for coord in ['x', 'y', 'z']
-            for sign in [1, -1]
-                directionalLight = new THREE.DirectionalLight opts.color, opts.intensity
-                directionalLight.position.set(0,0,0)[coord] = sign
-                @scene.add directionalLight
+        @renderHooks.push =>
+            cameraLight.position.copy @camera.position
 
     setCamera: ->
         view_angle = 45
