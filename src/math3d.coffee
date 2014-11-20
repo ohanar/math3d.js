@@ -227,8 +227,6 @@ class Math3dThreeJS
             @opts.width ?= document.documentElement.clientWidth/2
             @opts.height ?= @opts.width*2/3
 
-            @attachToDom @opts.parent
-
             # setup aspect ratio stuff
             aspectRatio = @aspectRatio = new THREE.Vector3 @opts.aspect_ratio...
             @scaleSize = @aspectRatio.length()
@@ -236,20 +234,10 @@ class Math3dThreeJS
             @squareScale.multiplyScalar @scaleSize
             @rescale = (vector) -> vector.multiply aspectRatio
 
-            # setup color stuff
-            @background = new THREE.Color @opts.background...
-            @element.style.background = @background.getStyle()
-            if @frameOpts.color?
-                @frameColor = new THREE.Color @frameOpts.color...
-            else
-                @frameColor = new THREE.Color(
-                    1-@background.r, 1-@background.g, 1-@background.b)
-
             # initialize the scene
             @scene = new THREE.Scene()
 
-            # functions in change hooks will be run when the controls
-            # recieve a change event
+            # functions in render hooks will be run when before rendering
             @renderHooks = []
 
             @opts.callback? @
@@ -258,6 +246,14 @@ class Math3dThreeJS
     finalize: ->
         @computeDimensions()
 
+        @element = document.createElement 'span'
+        @element.className = 'math-3d-viewer'
+        @element.style.display = 'inline-block'
+        if @opts.renderer is 'canvas'
+            # possibly show the canvas warning.
+            @element.title = 'WARNING: using slow non-WebGL canvas renderer'
+
+        @setColor()
         @setFrame()
         @setCamera()
         @setOrbitControls()
@@ -278,19 +274,7 @@ class Math3dThreeJS
 
         @setOnMouseOver()
 
-        # possibly show the canvas warning.
-        if @opts.renderer is 'canvas'
-            @element.title = 'WARNING: using slow non-WebGL canvas renderer'
-
-    attachToDom: (parentElement) ->
-        if @element?
-            removeElement @element
-        else
-            @element = document.createElement 'span'
-            @element.className = 'math-3d-viewer'
-            @element.style.display = 'inline-block'
-
-        parentElement.appendChild @element
+        @opts.parent.appendChild @element
 
     setDynamicRenderer: ->
         if @rendererType is 'dynamic'
@@ -639,6 +623,16 @@ class Math3dThreeJS
         @minDim = Math.min dim.x, dim.y, dim.z
 
         @center = @rescale @boundingBox.geometry.boundingBox.center()
+
+    setColor: ->
+        # setup color stuff
+        @background = new THREE.Color @opts.background...
+        @element.style.background = @background.getStyle()
+        if @frameOpts.color?
+            @frameColor = new THREE.Color @frameOpts.color...
+        else
+            @frameColor = new THREE.Color(
+                1-@background.r, 1-@background.g, 1-@background.b)
 
     # always call this after adding things to the scene to make sure track
     # controls are sorted out, etc. The client should never have to worry
