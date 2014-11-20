@@ -26,7 +26,7 @@
 if not document?
     document = @document
 
-math3d = (@math3d ?= {})
+math3d = {}
 
 trunc = (str, max_length) ->
     if not str?.length?
@@ -873,7 +873,7 @@ class Math3dThreeJS
 
         @_rendering = false
 
-math3d.render_3d_scene = (opts) ->
+@math3d = (opts) ->
     opts = defaults opts,
         scene    : required    # {opts:?, obj:?} or url from which to download (via ajax) a JSON string that parses to {opts:?,obj:?}
         element  : required    # DOM element to attach to
@@ -920,3 +920,6 @@ math3d.render_3d_scene = (opts) ->
             xhr.send()
         else
             opts.callback? "bad scene type #{typeof opts.scene}"
+
+for key, value of math3d
+    @math3d[key] = value
