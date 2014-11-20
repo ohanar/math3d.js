@@ -194,19 +194,20 @@ class Math3dThreeJS
             parent          : required
             width           : undefined
             height          : undefined
-            renderer        : undefined # 'webgl' or 'canvas' or undefined to choose best
+            renderer        : _defaultRendererType  # 'webgl' or 'canvas' (defaults to a best guess)
             background      : [1,1, 1]
-            spin            : false     # if true, image spins by itself when mouse is over it.
-            aspect_ratio    : [1, 1, 1] # a triple [x,y,z] of length three, which scales the x,y,z coordinates of everything by the given values.
-            stop_when_gone  : undefined # if given, animation, etc., stops when this html element (not jquery!) is no longer in the DOM
-            frame           : undefined # frame options
-            light           : undefined # light options
-            callback        : undefined # opts.callback(this object, error)
+            spin            : false                 # if true, image spins by itself when mouse is over it.
+            aspect_ratio    : [1, 1, 1]             # a triple [x,y,z] of length three, which scales the x,y,z coordinates of everything by the given values.
+            stop_when_gone  : undefined             # if given, animation, etc., stops when this html element (not jquery!) is no longer in the DOM
+            fast_points     : false                 # if true will use a faster point implementation, but they will be square and not work without WebGL
+            frame           : undefined             # frame options
+            light           : undefined             # light options
+            callback        : undefined             # opts.callback(this object, error)
 
         @frameOpts = defaults @opts.frame,
-            color           : undefined # defaults to the color-wise negation of the background
-            thickness       : .4        # zero thickness disables the frame
-            labels          : true      # whether or not to enable labels on the axes
+            color           : undefined             # defaults to the color-wise negation of the background
+            thickness       : .4                    # zero thickness disables the frame
+            labels          : true                  # whether or not to enable labels on the axes
 
         @lightOpts = defaults @opts.light,
             color           : [1, 1, 1]
@@ -263,7 +264,6 @@ class Math3dThreeJS
         owner = _sceneUsingRenderer
         wasDynamic = owner? and owner.rendererType is 'dynamic'
 
-        @opts.renderer ?= _defaultRendererType
         @setDynamicRenderer() # used to do the first render
 
         @setStaticRenderer()
@@ -453,9 +453,10 @@ class Math3dThreeJS
             radius          : 5
             texture         : required
             in_frame        : true
+            segments        : if @opts.renderer is 'webgl' then 64 else 24
             _basic_material : false
 
-        geometry = new THREE.SphereGeometry opts.radius, 32, 32
+        geometry = new THREE.SphereGeometry opts.radius, opts.segments, opts.segments
 
         if opts._basic_material
             material = new THREE.MeshBasicMaterial
@@ -523,7 +524,6 @@ class Math3dThreeJS
         opts.in_frame = false
 
         delete opts.size
-        delete opts.use_cloud
 
         point = @addSphere opts
         @_points.push point
@@ -534,10 +534,9 @@ class Math3dThreeJS
             loc         : [0,0,0]
             size        : 5
             texture     : required
-            use_cloud   : false     # faster, but you have to use square points
             in_frame    : true
 
-        if opts.use_cloud
+        if @opts.fast_points
             return @_addCloudPoint opts
         else
             return @_addSpherePoint opts
