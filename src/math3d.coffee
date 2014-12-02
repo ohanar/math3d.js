@@ -409,21 +409,14 @@ class Math3dThreeJS
         text.position.set opts.loc...
         text.rotation.set opts.rotation...
 
+        # we shift the origin of the text to the center so
+        # that rotations will be about the center of the text
+        # rather than the lower left corner
         geometry.computeBoundingBox()
-
-        center = geometry.boundingBox.center()
-        tmp = new THREE.Vector3()
-
-        # will be called on render, this is used to make
-        # text.rotation be centered on the center of the text
-        text.updateMatrix = ->
-            @matrix.makeRotationFromQuaternion @quaternion
-            @matrix.scale @scale
-
-            tmp.copy(center).applyMatrix4(@matrix).subVectors(@position, tmp)
-            @matrix.setPosition tmp
-
-            @matrixWorldNeedsUpdate = true
+        shift = (new THREE.Matrix4()).makeTranslation(
+            geometry.boundingBox.center().negate().toArray()...)
+        geometry.applyMatrix shift
+        geometry.boundingBox.applyMatrix4 shift
 
         @_finalizeObj text, false
 
