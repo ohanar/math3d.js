@@ -129,6 +129,7 @@ math3d.loadThreejs = (callback) ->
         callback()
 
     setupFonts = (callback) ->
+        load_helvetiker_regular?()
         if math3d.fontSources.length
             loadScript math3d.fontSources.shift(), (error) ->
                 if error
