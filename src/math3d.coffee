@@ -208,6 +208,7 @@ class Math3dThreeJS
             color           : undefined             # defaults to the color-wise negation of the background
             thickness       : .4                    # zero thickness disables the frame
             labels          : true                  # whether or not to enable labels on the axes
+            fontface        : undefined             # defaults to default fontface
 
         @lightOpts = defaults @opts.light,
             color           : [1, 1, 1]
@@ -703,6 +704,7 @@ class Math3dThreeJS
                             loc         : loc
                             text        : text
                             size        : textSize
+                            fontface    : @frameOpts.fontface
                             texture     :
                                     color   : frameColor
                                     opacity : 1
