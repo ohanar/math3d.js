@@ -471,6 +471,31 @@ class Math3dThreeJS
         @_finalizeObj sphere, opts.in_frame
         return sphere
 
+    addTorus: (opts) ->
+        opts = defaults opts,
+            loc             : [0,0,0]
+            inner_radius    : .3
+            outer_radius    : 1
+            texture         : required
+            in_frame        : true
+            segments        : if @opts.renderer is 'webgl' then 64 else 24
+
+        geometry = new THREE.TorusGeometry opts.outer_radius, opts.inner_radius*2, opts.segments, opts.segments
+
+        material = new THREE.MeshPhongMaterial
+            transparent : opts.texture.opacity < 1
+            side        : THREE.DoubleSide
+
+        material.ambient.setRGB     opts.texture.ambient...
+        material.specular.setRGB    opts.texture.specular...
+        material.color.setRGB       opts.texture.color...
+        material.opacity          = opts.texture.opacity
+
+        torus = new THREE.Mesh geometry, material
+        torus.position.set opts.loc...
+
+        return @_finalizeObj torus, opts.in_frame
+
     _addCloudPoint: (opts) ->
         if not @_cloud
             @_cloud = {}
@@ -606,6 +631,8 @@ class Math3dThreeJS
                 return @addPoint opts
             when 'sphere'
                 return @addSphere opts
+            when 'torus'
+                return @addTorus opts
             else
                 console.log "ERROR: bad object type #{opts.obj.type}"
 
