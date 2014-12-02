@@ -789,7 +789,7 @@ class Math3dThreeJS
                 @controls.autoRotateSpeed = @opts.spin
             @controls.autoRotate = true
 
-        @controls.addEventListener 'change', => @renderScene true
+        @controls.addEventListener 'change', => @renderScene()
 
     # on mouseover, we switch the renderer out to use the dynamic renderer
     setOnMouseOver: ->
