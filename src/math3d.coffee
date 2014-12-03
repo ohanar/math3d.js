@@ -196,7 +196,7 @@ class Math3dThreeJS
             width           : undefined
             height          : undefined
             renderer        : _defaultRendererType  # 'webgl' or 'canvas' (defaults to a best guess)
-            background      : [1,1, 1]
+            background      : [1, 1, 1]
             spin            : false                 # if true, image spins by itself when mouse is over it.
             aspect_ratio    : [1, 1, 1]             # a triple [x,y,z] of length three, which scales the x,y,z coordinates of everything by the given values.
             stop_when_gone  : undefined             # if given, animation, etc., stops when this html element (not jquery!) is no longer in the DOM
@@ -362,7 +362,7 @@ class Math3dThreeJS
     addText: (opts) ->
         opts = defaults opts,
             text        : required
-            loc         : [0,0,0]
+            loc         : required
             fontface    : undefined # defaults to Text3d's default font
             rotation    : undefined # by default will always face the camera
             size        : 1         # should really be specified
@@ -444,7 +444,7 @@ class Math3dThreeJS
 
     addSphere: (opts) ->
         opts = defaults opts,
-            loc             : [0,0,0]
+            loc             : required
             radius          : 5
             texture         : required
             in_frame        : true
@@ -474,14 +474,16 @@ class Math3dThreeJS
 
     addTorus: (opts) ->
         opts = defaults opts,
-            loc             : [0,0,0]
+            loc             : required
             inner_radius    : .3
             outer_radius    : 1
             texture         : required
             in_frame        : true
             segments        : if @opts.renderer is 'webgl' then 64 else 24
 
-        geometry = new THREE.TorusGeometry opts.outer_radius, opts.inner_radius*2, opts.segments, opts.segments
+        tube_diameter = opts.outer_radius-opts.inner_radius
+        doughnut_radius = (opts.outer_radius+opts.inner_radius)/2
+        geometry = new THREE.TorusGeometry doughnut_radius, tube_diameter, opts.segments, opts.segments
 
         material = new THREE.MeshPhongMaterial
             transparent : opts.texture.opacity < 1
@@ -551,7 +553,7 @@ class Math3dThreeJS
 
     addPoint: (opts) ->
         opts = defaults opts,
-            loc         : [0,0,0]
+            loc         : required
             size        : 5
             texture     : required
             in_frame    : true
