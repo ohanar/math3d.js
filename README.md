@@ -3,7 +3,7 @@
 A simple javascript library for creating interactive plots built on top of
 three.js.
 
-# API Reference
+## API Reference
 
 Once included, math3d.js introduces a single global function `math3d` which
 takes a single object argument of the following form:
