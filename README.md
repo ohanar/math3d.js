@@ -10,10 +10,17 @@ takes a single object argument of the following form:
 
 ```javascript
 {
-    scene       : required, // an object describing the scene to plot (see below) or a url pointing to a JSON string that parses to such an object
+    scene       : required, // an object describing the scene to plot (see
+                            // below) or a url pointing to a JSON string that
+                            // parses to such an object
+
     element     : required, // a DOM element to attach the plot to
-    timeout     : 30000,    // number of milleseconds to wait before timing out fetchs
-    callback    : null,     // optional callback taking arguments (scene object, error)
+
+    timeout     : 30000,    // number of milleseconds to wait before timing
+                            // out fetchs
+
+    callback    : null,     // optional callback taking arguments
+                            // (scene object, error)
 }
 ```
 
